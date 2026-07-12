@@ -1,0 +1,18 @@
+title = "tracecrumb secret scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "allow-env-files"
+description = "Ignore .env files"
+regex = '''.*'''
+path = '''(^|/)\.env(\..*)?$'''
+
+
+
+
+Get-Content "C:\Users\muzam\Downloads\tracecrumb-first60-main\tracecrumb-first60-main\node_modules\.pnpm\lightningcss-win32-x64-msvc@1.32.0\node_modules\lightningcss-win32-x64-msvc\lightningcss.win32-x64-msvc.node" -TotalCount 1
+Get-Content "C:\Users\muzam\Downloads\tracecrumb-first60-main\tracecrumb-first60-main\node_modules\.pnpm\vite@8.1.0\node_modules\vite\dist\node\chunks\build.js" -TotalCount 1
+Get-Content "C:\Users\muzam\Downloads\tracecrumb-first60-main\tracecrumb-first60-main\node_modules\.pnpm\vite@8.1.0\node_modules\vite\dist\node\chunks\dist.js" -TotalCount 1
+Get-Content "C:\Users\muzam\Downloads\tracecrumb-first60-main\tracecrumb-first60-main\node_modules\.pnpm\vite@8.1.0\node_modules\vite\dist\node\chunks\node.js" -TotalCount 1

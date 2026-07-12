@@ -1,0 +1,29 @@
+{
+  "name": "tracecrumb",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:configured": "node ./scripts/check-deploy-env.mjs && vite build",
+    "preview": "vite preview",
+    "test": "node ./scripts/ship-tests.mjs",
+    "ship": "npm run test && npm run build",
+    "deploy:cloudflare": "npm run build:configured && wrangler deploy",
+    "deploy:pages": "npm run build:configured && wrangler pages deploy dist"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.108.2",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "vite": "8.1.0",
+    "wrangler": "4.110.0"
+  }
+}

@@ -1,0 +1,168 @@
+session:
+  name: tracecrumb_auth_free_validation_finalization
+  date: 2026-07-12
+  objective: >-
+    Make the existing TraceCrumb wedge immediately deployable for distribution and validation,
+    remove active authentication dependency, enforce ten live runs per validation workspace,
+    and improve only the decision-impact surfaces that materially affect proof quality.
+  decision_rule: >-
+    Preserve current evidence and avoid destructive refactors; use an additive auth-free path,
+    then distribute only after one exact public smoke test passes.
+
+priority_time_weights:
+  auth_free_access_and_server_enforcement:
+    weight: 0.34
+    blunt_reason: Without this, the requested access model is false or bypassable.
+  core_checkpoint_mechanism:
+    weight: 0.24
+    blunt_reason: Distribution is wasted if the result does not visibly change a decision.
+  persistence_reliability_and_evidence_loop:
+    weight: 0.18
+    blunt_reason: Investor-grade proof requires durable action, feedback, and outcome evidence.
+  deployment_and_smoke_verification:
+    weight: 0.14
+    blunt_reason: No outreach should point to an unverified public path.
+  human_distribution_and_follow_up:
+    weight: 0.10
+    blunt_reason: Necessary immediately after technical pass, but cannot compensate for a broken mechanism.
+  total: 1.0
+
+technical_applicable:
+  completed:
+    - removed all active frontend Supabase Auth calls
+    - removed direct browser reads and writes to product tables
+    - added email-only validation signup with random browser access token
+    - added unique token hash and email hash at the database boundary
+    - added atomic Postgres run reservation with max_runs default 10
+    - added global daily signup and provider budgets plus allowed-origin enforcement
+    - configured the Edge Function with verify_jwt false
+    - added additive validation_* tables; legacy data is not dropped or mutated
+    - retained strict structured OpenAI output and deterministic fallback
+    - retained immutable pre-review commit hash, history, copy, Markdown export, JSON export, and source attribution
+    - added consequence_type, decision_deadline, unknowns, action owner/due date, structured review feedback, and tracecrumb_effect
+  architecture_boundary:
+    frontend: static React/Vite application
+    trusted_gateway: existing ai-orchestrator Edge Function
+    database: Supabase Postgres validation_* tables only for the active path
+    authentication: none
+    access_credential: random browser token; not a user identity or cross-device account
+    secrets: service role, OpenAI key, and abuse hash secret remain server-side only
+  robustness_non_negotiables:
+    - browser cannot directly select, insert, update, or delete active validation tables
+    - one review submission consumes at most one server-reserved run
+    - worked example and drafting consume zero runs
+    - provider failure returns a labelled fallback rather than a white screen or invented cause
+    - original theory is saved before review and receives a server-generated commit hash
+    - action, feedback, and outcome writes are ownership-scoped to the same validation session
+    - no destructive migration against existing authenticated records
+  accepted_limits_for_validation:
+    - same-browser access only; clearing storage loses the token
+    - email is captured but not verified because verification would recreate auth
+    - determined multi-email abuse is out of scope; this is a validation budget, not a fraud platform
+    - Edge Function remains the thin trusted gateway rather than introducing a second backend today
+
+human_sociotechnical:
+  completed_product_controls:
+    - explicitly tells users to redact credentials, secrets, and customer PII
+    - states that no telemetry is queried and no root-cause claim is made
+    - preserves responder authority and requires an explicit next move
+    - separates observation, assumption, mismatch, unknown, consequence, and switch condition
+    - asks who owns the next move and when it is due
+    - records whether TraceCrumb changed the decision, test, timing, participants, or only strengthened confidence
+  operator_actions_before_distribution:
+    - use one dedicated validation email/browser for the smoke test
+    - submit one real redacted incident decision, not only the worked sample
+    - confirm the counter-hypothesis is labelled as a hypothesis
+    - confirm the cheapest check is executable by the intended responder
+    - confirm no action is preselected
+    - record the resulting action and outcome in the product
+  user_expectation_boundary:
+    - no cross-device recovery during this validation stage
+    - exports are the portability and backup mechanism
+    - one email receives one ten-run validation workspace unless manually reset
+    - tool output informs but never authorizes operational action
+
+functional_verification:
+  automated:
+    commands:
+      - npm ci
+      - npm run test
+      - npm run build
+    pass_condition: all commands exit zero
+  production_smoke_sequence:
+    - apply supabase/migrations/20260712090000_auth_free_validation.sql
+    - set OPENAI_API_KEY, OPENAI_MODEL, ALLOWED_ORIGINS, MAX_VALIDATION_RUNS, DAILY_REVIEW_LIMIT, DAILY_SIGNUP_LIMIT, and ABUSE_HASH_SECRET
+    - deploy ai-orchestrator with --no-verify-jwt
+    - deploy the frontend with VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY
+    - open /?source_channel=smoke_test in a private browser
+    - open worked example and confirm no run is consumed
+    - register one email and confirm 10 of 10 runs remain
+    - submit one live redacted checkpoint and confirm 9 of 10 remain
+    - confirm four checkpoint cards render
+    - save explicit action, structured feedback, and outcome
+    - refresh and reopen the saved record
+    - verify direct browser table access is denied
+  do_not_proceed_unless:
+    - full public path completes once without manual database repair
+    - run count changes exactly once for one submitted checkpoint
+    - action has no default selection
+    - fallback is clearly labelled if the provider is unavailable
+    - history survives refresh on the same browser
+
+distribution_and_validation:
+  immediate_target:
+    qualified_invitations: 12
+    public_exposures_before_direct_outreach: 0
+    public_exposures_after_smoke_pass: 1
+  invitation_filter:
+    - recent or live consequential software incident decision
+    - recipient can influence the next operational move
+    - recipient can provide redacted evidence and later report the outcome
+  invitation_ask: >-
+    Run one real incident decision through the checkpoint, record the exact next move,
+    and tell us whether the contradiction or falsification check changed the decision, test,
+    timing, participants, or nothing.
+  evidence_to_capture:
+    - source_channel
+    - qualified submission
+    - checkpoint completed
+    - explicit action selected
+    - novelty
+    - alternative credibility
+    - check feasibility
+    - specificity
+    - tracecrumb_effect
+    - outcome
+    - second run or export/share
+  24_hour_targets:
+    real_non_demo_submissions: 3
+    completed_explicit_actions: 2
+    materially_changed_or_strengthened_move: 1
+    falsification_check_committed_or_run: 1
+    second_run_or_export_share: 1
+  continuation_gate_after_5_real_checks:
+    minimum_decision_impact_rate: 0.50
+    minimum_executable_check_rate: 0.50
+    repeat_or_share_signals: 2
+  stop_or_revise_conditions:
+    - users cannot provide a real consequential case
+    - output is repeatedly generic or non-executable
+    - fewer than half of completed checks affect or strengthen the next move
+    - users complete signup but do not submit a real checkpoint
+
+out_of_scope_this_session:
+  - deleting legacy authenticated data
+  - cross-device recovery
+  - team workspaces or role administration
+  - billing
+  - CRM or automated outreach
+  - reminders or schedulers
+  - analytics dashboard
+  - provider migration
+  - live telemetry integrations
+  - autonomous remediation
+
+session_exit_state:
+  repo_status: finalized_locally_and_buildable
+  distribution_status: blocked_only_on_production_migration_deploy_and_smoke_test
+  next_exact_move: Apply the auth-free migration, deploy the function and frontend, pass the smoke sequence, then send the 12 qualified invitations.
