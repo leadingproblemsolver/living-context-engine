@@ -1,0 +1,140 @@
+metadata:
+  status: observed
+  confidence: 95
+  evidence_refs:
+    - src/routes/index.tsx
+    - supabase/functions/infer-guardrails/index.ts
+    - supabase/functions/evaluate/index.ts
+    - schema.sql
+
+workflow:
+  - stage_id: define-intent
+    stage_name: Define what must remain true
+    purpose: Establish the user-owned outcome boundary.
+    actor: user
+    input: purpose, workflow, target, proof of success, optional exclusions
+    required_context: none
+    action: complete four required plain-language fields
+    output: intent contract
+    decision_rules: all four required fields must be non-empty
+    maximum_latency: immediate
+    maximum_user_effort: 60 seconds target
+    failure_modes: vague or missing intent
+    fallback: retain draft locally and identify the missing field
+    verification: required-field validation
+    logged_events: []
+    next_stage: define-guardrails
+
+  - stage_id: define-guardrails
+    stage_name: Accept or edit guardrails
+    purpose: Convert intent into observable constraints controlled by the user.
+    actor: user with optional model assistance
+    input: intent contract
+    required_context: purpose, target, success definition, explicit exclusions
+    action: infer 3-7 guardrails or create them manually; review every rule
+    output: ordered active guardrail set
+    decision_rules:
+      - AI proposals have no authority until accepted by the user
+      - block is reserved for purpose-invalidating or explicit non-negotiables
+      - objective thresholds require user-supplied numbers
+    maximum_latency: 30 seconds model timeout
+    maximum_user_effort: review each proposed rule once
+    failure_modes: invalid model output, invented threshold, duplicated rule
+    fallback: deterministic local templates and manual editing
+    verification: schema cleaning plus user review
+    logged_events:
+      - MODEL_CALLED
+      - VALIDATION_COMPLETED
+      - RULE_UPDATED
+    next_stage: submit-work
+
+  - stage_id: submit-work
+    stage_name: Submit the next action or output
+    purpose: Capture the exact object being judged and its available proof.
+    actor: user or authenticated integration
+    input: work text, free-form evidence, binary values, metrics, checklist states
+    required_context: active guardrail set
+    action: submit one bounded evaluation request
+    output: normalized evaluation packet
+    decision_rules:
+      - request body size is bounded
+      - at least one active guardrail is required
+      - missing structured evidence remains missing
+    maximum_latency: immediate validation
+    maximum_user_effort: only evidence required by active guardrails
+    failure_modes: oversized request, missing work, incomplete rule configuration
+    fallback: return explicit recoverable validation error
+    verification: server normalization and validation
+    logged_events: []
+    next_stage: evaluate
+
+  - stage_id: evaluate
+    stage_name: Judge against every active guardrail
+    purpose: Produce a conservative, traceable constraint judgment.
+    actor: deterministic engine plus bounded model for semantic rules
+    input: normalized evaluation packet and exact guardrail snapshot
+    required_context: accepted purpose, target, success definition, guardrails
+    action:
+      - evaluate binary, threshold, and checklist rules deterministically
+      - evaluate evidence rules semantically
+      - apply deterministic verdict precedence
+    output: finding per guardrail, verdict, score, correction
+    decision_rules:
+      - violated block rule forces Block
+      - any unclear or violated rule prevents Pass
+      - model cannot decide final verdict or score
+    maximum_latency: 55 seconds hard provider ceiling
+    maximum_user_effort: none during execution
+    failure_modes: provider timeout, invalid model JSON, persistence failure
+    fallback: recoverable error; objective-only sets use rules engine without model
+    verification: finding completeness, status normalization, contract tests
+    logged_events:
+      - MODEL_CALLED
+      - OUTCOME_VERIFIED
+    next_stage: deliver-result
+
+  - stage_id: deliver-result
+    stage_name: Deliver the decision and smallest correction
+    purpose: Make the result immediately actionable.
+    actor: system
+    input: verified evaluation result
+    required_context: highest-priority non-met finding
+    action: show verdict first, then reason, evidence, and correction
+    output: proceed, clarify, or stop instruction
+    decision_rules: one dominant next action
+    maximum_latency: immediate after evaluation
+    maximum_user_effort: one decision
+    failure_modes: technically correct but unclear result
+    fallback: preserve request ID for diagnosis
+    verification: result includes all required fields
+    logged_events: []
+    next_stage: persist-and-learn
+
+  - stage_id: persist-and-learn
+    stage_name: Retain the decision contract
+    purpose: Preserve reproducibility and enable measured learning.
+    actor: server
+    input: result, constraint snapshot, model identity, operational metadata
+    required_context: authenticated user
+    action: store immutable evaluation and sanitized operational events
+    output: auditable history
+    decision_rules: browser cannot author evaluation or operational event records
+    maximum_latency: within request lifecycle
+    maximum_user_effort: none
+    failure_modes: database unavailable
+    fallback: do not claim successful cloud evaluation if audit persistence fails
+    verification: returned evaluation ID
+    logged_events:
+      - OUTCOME_VERIFIED
+    next_stage: external outcome verification
+
+workflow_metrics:
+  steps_to_first_value: 3
+  time_to_first_value_target_seconds: 60
+  required_user_inputs_initial: 4
+  required_decisions_initial: guardrail review
+  context_switches_target: 0
+  manual_handoffs_target: 0
+  failure_recovery_steps_target: 1
+  repeat_use_time_target_seconds: 30
+  founder_support_minutes_target_per_user_per_month: 10

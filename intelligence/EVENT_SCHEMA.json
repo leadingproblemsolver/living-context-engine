@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DriftGuardOperationalEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_type", "occurred_at", "actor_type", "user_id", "status", "metadata"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "RULE_UPDATED",
+        "MODEL_CALLED",
+        "VALIDATION_COMPLETED",
+        "OUTCOME_VERIFIED",
+        "FAILURE_DETECTED",
+        "USER_CORRECTION_RECEIVED"
+      ]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "actor_type": { "enum": ["user", "system", "model", "tool", "human_operator"] },
+    "user_id": { "type": "string", "format": "uuid" },
+    "set_id": { "type": ["string", "null"] },
+    "evaluation_id": { "type": ["string", "null"], "format": "uuid" },
+    "request_id": { "type": ["string", "null"], "maxLength": 100 },
+    "stage_id": { "type": ["string", "null"], "maxLength": 80 },
+    "status": { "enum": ["started", "completed", "failed"] },
+    "latency_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "model_provider": { "type": ["string", "null"] },
+    "model_name": { "type": ["string", "null"] },
+    "metadata": {
+      "type": "object",
+      "description": "Sanitized operational summaries only. Do not duplicate raw work text, free-form evidence, secrets, or email addresses."
+    }
+  }
+}

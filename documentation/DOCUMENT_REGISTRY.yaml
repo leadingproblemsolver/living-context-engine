@@ -1,0 +1,40 @@
+metadata:
+  status: observed
+  confidence: 90
+
+documents:
+  - path: README.md
+    purpose: deployment and operator quick start
+    owner: repository maintainer
+    sources: [package.json, ENVIRONMENT.md, schema.sql, docs/API.md]
+    review_trigger: deployment, environment, or command change
+  - path: docs/product/USE_CASE.yaml
+    purpose: canonical product boundary
+    owner: product owner
+    sources: [PRODUCT_DIRECTION.md, implemented workflow]
+    review_trigger: observed user or trigger changes
+  - path: docs/product/CORE_WORKFLOW.yaml
+    purpose: stage and handoff contract
+    owner: product and engineering
+    sources: [frontend, Edge Functions, schema]
+    review_trigger: workflow stage or decision-rule change
+  - path: docs/product/ARCHITECTURE.md
+    purpose: current component and trust-boundary description
+    owner: engineering
+    sources: [source tree, schema.sql]
+    review_trigger: component, data-flow, or trust-boundary change
+  - path: docs/API.md
+    purpose: authenticated integration contract
+    owner: engineering
+    sources: [Edge Function handlers]
+    review_trigger: request or response schema change
+  - path: RELEASE_GATES.md
+    purpose: executable non-negotiables
+    owner: engineering
+    sources: [scripts/release-check.mjs, tests]
+    review_trigger: new invariant or release failure
+  - path: docs/product/READINESS.yaml
+    purpose: evidence-based release verdict
+    owner: product and engineering
+    sources: [validation output, hosted smoke test, pilot evidence]
+    review_trigger: verification evidence changes

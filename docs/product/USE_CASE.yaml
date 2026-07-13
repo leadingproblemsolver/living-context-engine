@@ -1,0 +1,63 @@
+metadata:
+  status: inferred
+  confidence: 92
+  evidence_refs:
+    - src/routes/index.tsx
+    - src/lib/drift-engine.ts
+    - supabase/functions/evaluate/index.ts
+    - PRODUCT_DIRECTION.md
+
+canonical_use_case:
+  user: An individual operator making consequential decisions or producing consequential outputs.
+  user_class: Founder, product operator, knowledge worker, reviewer, or workflow owner.
+  triggering_event: Before the user executes, publishes, approves, or hands off work where violating a constraint would cause meaningful rework or risk.
+  starting_state: The intended purpose and constraints exist in memory, notes, or scattered instructions but are not consistently applied at the decision boundary.
+  job_to_be_done: Determine whether the proposed action or output remains inside the constraints that matter, and identify the smallest correction when it does not.
+  inelastic_pain: Under time pressure, users drift from purpose or omit a non-negotiable; the mistake is discovered after execution, publication, or handoff.
+  existing_workaround:
+    - remember the rules manually
+    - reread project notes
+    - use an informal checklist
+    - ask another person to review
+    - discover the violation after the fact
+  current_cost:
+    - repeated rework
+    - inconsistent decisions
+    - delayed delivery
+    - credibility loss
+    - avoidable operational risk
+  required_input:
+    initial:
+      - purpose
+      - workflow
+      - target
+      - proof of success
+    repeated:
+      - proposed action or output
+      - structured values or evidence required by active guardrails
+  desired_output:
+    - Pass, Watch, or Block
+    - finding for every active guardrail
+    - traceable reason and evidence state
+    - smallest safe corrective action
+  expected_result: The user proceeds only when every active guardrail is met, or corrects the highest-priority issue before proceeding.
+  time_to_result:
+    initial_setup_target: under 60 seconds
+    repeated_check_target: under 30 seconds excluding external model latency
+  frequency: At every consequential decision or output checkpoint selected by the user or an external integration.
+  failure_stakes: Medium to high, depending on the user-defined workflow; DriftGuard must not invent the stakes.
+  trust_requirement: High because the result can stop work.
+  proof_required:
+    - objective rules evaluated deterministically
+    - semantic findings tied to submitted evidence
+    - exact constraint snapshot retained
+    - model and evaluation mode retained
+  success_event: A check prevents a violation, forces clarification, or gives justified permission to proceed, and the downstream outcome confirms the decision was useful.
+  repeat_or_pay_reason: Repeated prevention of rework or risk costs more than the setup and check effort.
+  non_goals:
+    - general task management
+    - autonomous policy creation
+    - passive surveillance
+    - invented legal or compliance authority
+    - guaranteed correctness
+    - replacing accountable human approval

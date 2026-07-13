@@ -1,0 +1,52 @@
+metadata:
+  status: inferred
+  confidence: 90
+  evidence_refs:
+    - src/routes/index.tsx
+    - PRODUCT_DIRECTION.md
+
+brand:
+  category_definition: Constraint-control layer for consequential work.
+  primary_promise: Keep each important action or output inside the constraints the user accepted.
+  core_enemy: Quiet drift under time pressure and undefined or inconsistently applied constraints.
+  emotional_result: justified confidence before proceeding
+  operational_result: earlier detection of violations and missing proof
+  economic_result: avoided rework and preventable downstream risk where the workflow is consequential
+  proof_standard:
+    - observable guardrails
+    - finding per rule
+    - deterministic precedence
+    - exact snapshot and model identity
+    - observed pilot outcomes before quantified claims
+  preferred_vocabulary:
+    - purpose
+    - guardrail
+    - constraint
+    - criticality
+    - enforcement
+    - evidence
+    - Pass
+    - Watch
+    - Block
+    - smallest safe correction
+    - checkpoint
+  prohibited_vocabulary:
+    - vitality
+    - autonomous governance
+    - zero risk
+    - guaranteed compliance
+    - always correct
+    - passive monitoring
+    - magic
+    - AI-powered everything
+  tone: direct, calm, specific, conservative under uncertainty
+  sentence_style: short outcome-first sentences; domain language before system language
+  visual_principles:
+    - one dominant action
+    - verdict before analytics
+    - advanced controls progressively disclosed
+    - state clarity over animation
+  claim_boundaries:
+    - never claim a quantified business outcome without observed evidence
+    - never call a checkpoint automatic unless an integration triggers it
+    - never represent model interpretation as deterministic proof

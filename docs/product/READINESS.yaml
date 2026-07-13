@@ -1,0 +1,34 @@
+metadata:
+  status: observed
+  confidence: 92
+  evidence_refs:
+    - RELEASE_REPORT.md
+    - scripts/worker-smoke.mjs
+    - scripts/release-check.mjs
+    - scripts/judgment-contract.test.mjs
+    - schema.sql
+
+readiness:
+  current_stage: 4-reliable-for-target-use-in-code
+  target_stage: 5-verified-under-realistic-live-conditions
+  overall_percentage: 90
+  core_workflow_ready: true
+  externally_presentable: true
+  pilot_ready: true
+  deployment_ready: true
+  production_ready: false
+  production_ready_reason: Local clean-install, build, Edge, and Cloudflare runtime checks pass; live credentials, hosted migration, function invocation, auth email delivery, and cross-user RLS isolation remain account-bound.
+  critical_blockers:
+    - supply account-bound Supabase, OpenAI, and Cloudflare credentials
+    - deploy and complete the production smoke test
+    - verify magic-link email delivery with production SMTP
+  next_single_constraint: Real pilot outcome evidence.
+  next_three_actions:
+    - deploy using the literal all-functions command and exact environment contract
+    - complete the nine-step hosted smoke test
+    - run a bounded pilot with 5-10 operators and capture avoided violations, false blocks, and repeat use
+  evidence_required_to_advance:
+    - successful hosted smoke-test record
+    - zero cross-user data visibility in two-account test
+    - labeled semantic evaluation set with acceptable false-Pass rate
+    - at least three observed useful intervention events

@@ -1,0 +1,317 @@
+acceptance_tests:
+  - test_id: AT-G001
+    gap_id: DG-G001
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Change readiness to internal-demo/staging-ready; define executable gates for pilot and production.
+    expected_result: No stage is marked ready unless every required evidence item has a linked passing artifact or test.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: docs/product/READINESS.yaml marks pilot_ready and deployment_ready
+      true although hosted auth, RLS isolation, semantic quality, support, feedback, and real outcome evidence remain unverified."
+  - test_id: AT-G002
+    gap_id: DG-G002
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Make evaluate accept set_id, input, expected_policy_version, and idempotency_key; load rules from DB; reject stale
+      versions with 409.
+    expected_result:
+      Submitting altered or stale client guardrails never changes stored policy and never evaluates without the
+      current approved version.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The evaluate function accepts a complete client-supplied workspace
+      and calls save_guardrail_set before judgment. A stale, tampered, or integration-supplied payload can replace newer user-approved
+      rules."
+  - test_id: AT-G003
+    gap_id: DG-G003
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Separate policy save from evaluation; add atomic record_evaluation RPC for evaluation, findings, events, idempotency,
+      and policy-version check.
+    expected_result:
+      Injected failure at each persistence step leaves either the complete evaluation transaction or no evaluation-side
+      mutation.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The function commits save_guardrail_set, then separately calls
+      the model and inserts the evaluation. Failure after the save can leave a changed policy with no matching audit, while
+      API docs call the operation transactional."
+  - test_id: AT-G004
+    gap_id: DG-G004
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Rename current event and add explicit outcome-confirmation schema/endpoint.
+    expected_result:
+      No OUTCOME_VERIFIED event exists without actor, observed result, evidence reference, and associated evaluation
+      ID.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Every successful judgment emits OUTCOME_VERIFIED even though
+      DriftGuard has not observed whether the user followed the correction or achieved the desired result."
+  - test_id: AT-G005
+    gap_id: DG-G005
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Add data-use consent, sensitivity classification, retention policy, delete/export controls, and a local-only mode
+      boundary.
+    expected_result:
+      A new user cannot send semantic content before acknowledging the exact processing/storage policy; deletion
+      removes all owned cloud data.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Submitted work and evidence are sent to the configured AI provider
+      and stored in evaluations, but the product has no explicit pre-call disclosure, data classification, retention choice,
+      or deletion control."
+  - test_id: AT-G006
+    gap_id: DG-G006
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Add pgTAP/client integration tests for all RLS policies and complete a two-account staging test.
+    expected_result:
+      User A cannot select/update/delete User B data; browser roles cannot write audits/events; tests run in
+      CI and staging.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: RLS policies and auth checks are present, but there is no automated
+      two-user database test or successful hosted authentication/function evidence."
+  - test_id: AT-G007
+    gap_id: DG-G007
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Namespace local data by user, preserve anonymous draft separately, detect divergence, and require choose/merge before
+      overwrite.
+    expected_result:
+      A test with divergent local and cloud data preserves both until the user explicitly resolves the conflict;
+      sign-out can clear account data.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: On sign-in, the latest cloud set automatically replaces the
+      local workspace and is immediately written back to localStorage. Sign-out intentionally leaves that workspace visible
+      in the browser."
+  - test_id: AT-G008
+    gap_id: DG-G008
+    priority: P0
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Add persistent mode-specific copy and a visible capability matrix; optionally retain local previews in account-scoped
+      IndexedDB.
+    expected_result:
+      Every persistence claim states the applicable mode; refreshing local preview does not imply a retained
+      audit unless implemented.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The landing page says every verdict retains an exact snapshot,
+      while unsigned local preview results exist only in component memory and are lost on refresh."
+  - test_id: AT-G009
+    gap_id: DG-G009
+    priority: P1
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Create 50+ labeled cases including adversarial and ambiguous inputs; define zero critical false-Pass tolerance for
+      pilot.
+    expected_result: Pinned model/prompt meets agreed false-Pass, false-Block, completeness, latency, and JSON-validity thresholds.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Five tests cover only the local deterministic engine. There
+      are no labeled semantic cases, prompt-injection cases, missing-finding cases, model-version regressions, or false-pass
+      measurements."
+  - test_id: AT-G010
+    gap_id: DG-G010
+    priority: P1
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Add evaluation_outcomes table and a minimal 'What happened?' confirmation after the workflow boundary.
+    expected_result: Pilot metrics distinguish evaluation, user action, override, and independently evidenced outcome.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The system returns a correction but cannot record whether the
+      user accepted it, changed the action, overrode the verdict, or achieved the desired result."
+  - test_id: AT-G011
+    gap_id: DG-G011
+    priority: P1
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Deploy staging, configure SMTP/provider/origins, execute scripted smoke, save evidence.
+    expected_result:
+      Fresh user completes sign-in, save, infer, evaluate, history read, sign-out, and two-user isolation in
+      staging.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Local install, build, Edge bundle, and Worker smoke pass; schema
+      push, functions, SMTP magic link, provider call, and production origins have not been exercised together."
+  - test_id: AT-G012
+    gap_id: DG-G012
+    priority: P1
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      For pilot, support only browser/manual and one documented internal relay; defer generic webhooks or add scoped integration
+      credentials and idempotency.
+    expected_result:
+      A documented integration survives token rotation/retry and duplicate delivery without policy mutation or
+      duplicate audit.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The endpoint requires an expiring user access token, accepts
+      an entire mutable workspace, and has no idempotency key or stable external event ID. The UI exposes API/webhook as an
+      input mode."
+  - test_id: AT-G013
+    gap_id: DG-G013
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Add recent evaluations and a single evaluation detail/replay surface after outcome capture schema is stable.
+    expected_result:
+      Signed-in user can retrieve only their evaluations, open exact snapshot, and rerun as a new evaluation
+      without mutating the original.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Evaluations are queryable by the user in the database, but the
+      UI never loads them. The user cannot revisit a verdict, compare policy snapshots, or prove what changed."
+  - test_id: AT-G014
+    gap_id: DG-G014
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Keep result mode visible at verdict level, require acknowledgment for degraded Block/Watch, and add retry.
+    expected_result:
+      A forced provider outage cannot produce a result visually confusable with AI mode; user can retry without
+      losing input.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: If AI/cloud evaluation fails, the browser silently substitutes
+      local preview and shows only a short flash plus a small footer mode label."
+  - test_id: AT-G015
+    gap_id: DG-G015
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Emit sanitized FAILURE_DETECTED events in catch paths, add event-delivery health metric, and define one pilot alert
+      route.
+    expected_result:
+      Injected failures appear with request_id, stage, stable code, and alert; no raw work/evidence appears in
+      telemetry.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Operational event insertion is best-effort and only logs success-heavy
+      events. Function exceptions return errors without FAILURE_DETECTED events, alerts, or health aggregation."
+  - test_id: AT-G016
+    gap_id: DG-G016
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Add guardrail_sets.policy_version and update RPC requiring expected version; append policy_change event.
+    expected_result: Two clients saving the same version cause one success and one 409 conflict; no silent overwrite.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Guardrails have a version column, but saves delete and recreate
+      the list with default version 1. Guardrail sets lack a policy version/ETag and updates are last-write-wins."
+  - test_id: AT-G017
+    gap_id: DG-G017
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Define pilot retention, add export and account/workspace deletion workflow, and test cascades.
+    expected_result: User export is complete; deletion removes owned rows and local account state within defined time.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: Raw inputs, evidence, findings, and snapshots persist with no
+      user-facing export/delete path, account deletion workflow, or retention job."
+  - test_id: AT-G018
+    gap_id: DG-G018
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action: Create pilot runbook, support channel, severity rules, response targets, and owner matrix.
+    expected_result: Every P0/P1 failure has a named owner, contact path, response target, and recovery procedure tested once.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The repo has deployment and technical docs but no named pilot
+      support channel, response time, exception owner, model-quality reviewer, or incident runbook."
+  - test_id: AT-G019
+    gap_id: DG-G019
+    priority: P2
+    precondition: Use isolated test/staging data; inject the failure or conflict described by the gap.
+    action:
+      Add one bounded retry for 429/5xx, record prompt/model version, and require benchmark pass before model change;
+      defer multi-provider fallback until pilot need.
+    expected_result:
+      Transient failure test retries once without duplicate audit; model version changes cannot deploy without
+      evaluation report.
+    evidence_to_retain:
+      - automated test result or signed staging checklist
+      - request/correlation IDs where applicable
+      - before/after database state
+      - user-visible screenshot for UI behavior
+    failure_condition:
+      "The repository still permits or claims: The AI adapter makes one synchronous provider call. There is
+      no retry for transient errors, secondary model, canary, rollback, or model/prompt evaluation gate."

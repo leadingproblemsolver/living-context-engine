@@ -1,0 +1,87 @@
+metadata:
+  status: inferred
+  confidence: 80
+  evidence_refs:
+    - docs/product/USE_CASE.yaml
+    - src/routes/index.tsx
+
+primary_operator:
+  audience_class: primary_operator
+  job: Keep a consequential action or output aligned with accepted constraints.
+  pain: Important conditions are forgotten or inconsistently applied under pressure.
+  desired_gain: A fast, defensible proceed/correct/stop decision.
+  feared_failure: False reassurance or an unexplained block.
+  required_proof: Finding per guardrail, evidence state, deterministic precedence, stored snapshot.
+  adoption_power: direct user
+  best_surface: single-page workspace and authenticated API
+  message_hierarchy:
+    - stop important work from quietly drifting
+    - get Pass, Watch, or Block
+    - see exactly why
+    - apply the smallest correction
+  primary_cta: Build my guardrails
+  objections:
+    - setup will take too long
+    - AI will invent rules
+    - the verdict will be arbitrary
+    - sensitive work will be exposed
+  packaging_requirements:
+    - setup under 60 seconds
+    - local preview
+    - human-editable guardrails
+    - explicit evidence controls
+  emphasize:
+    - immediate judgment
+    - human ownership
+    - smallest correction
+  suppress:
+    - architecture terminology
+    - model novelty
+    - speculative automation
+
+operational_lead:
+  audience_class: operational_lead
+  job: Reduce decision variance across a repeated team workflow.
+  pain: Different operators interpret the same requirements differently.
+  desired_gain: A versioned, auditable judgment contract.
+  feared_failure: Rules become rigid, unowned, or silently change.
+  required_proof: Versioned guardrails, evaluation history, tenant isolation, override governance.
+  adoption_power: rollout owner
+  best_surface: future shared policy and outcome view
+  primary_cta: Run a bounded pilot
+  packaging_requirements:
+    - explicit policy owner
+    - change history
+    - team-level metrics
+  emphasize:
+    - consistency
+    - traceability
+    - bounded AI role
+  suppress:
+    - personal productivity framing
+  status: predicted
+  confidence: 65
+
+administrator_developer:
+  audience_class: administrator_developer
+  job: Deploy, secure, integrate, and diagnose DriftGuard.
+  pain: Ambiguous environment variables, hidden trust boundaries, and fragile function deployment.
+  desired_gain: Reproducible deployment with explicit schemas and failure contracts.
+  feared_failure: secret leakage, broken RLS, invalid slugs, or untraceable model behavior.
+  required_proof: release gates, schema, API contract, environment contract, smoke test.
+  adoption_power: technical gatekeeper
+  best_surface: repository documentation and CLI
+  primary_cta: Run npm run validate
+  packaging_requirements:
+    - exact environment names
+    - literal function slugs
+    - one canonical schema
+    - rollback and diagnostics
+  emphasize:
+    - reproducibility
+    - isolation
+    - auditability
+  suppress:
+    - broad marketing claims
+  status: observed
+  confidence: 95

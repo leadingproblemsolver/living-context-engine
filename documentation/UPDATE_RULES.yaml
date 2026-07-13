@@ -1,0 +1,46 @@
+metadata:
+  status: designed
+  confidence: 85
+
+rules:
+  - trigger: schema.sql changes
+    update:
+      - supabase/migrations/20260706000000_driftguard.sql via npm run schema:sync
+      - docs/product/ARCHITECTURE.md when entities or trust boundaries change
+      - intelligence/EVENT_SCHEMA.json when operational_events changes
+    verification: npm run validate
+  - trigger: Edge request or response contract changes
+    update:
+      - docs/API.md
+      - docs/product/CORE_WORKFLOW.yaml
+      - contract tests
+    verification: npm run check:edge and npm test
+  - trigger: judgment precedence changes
+    update:
+      - PRODUCT_DIRECTION.md
+      - RELEASE_GATES.md
+      - scripts/judgment-contract.test.mjs
+    verification: every non-met finding still prevents Pass unless the product contract is explicitly versioned
+  - trigger: deployment command or environment variable changes
+    update:
+      - README.md
+      - ENVIRONMENT.md
+      - .env.example files
+      - scripts/env-check.mjs
+    verification: clean-install deployment rehearsal
+  - trigger: repeated production failure
+    update:
+      - RELEASE_GATES.md
+      - regression test
+      - release report
+    verification: failing reproduction before fix and passing regression after fix
+  - trigger: observed pilot outcome
+    update:
+      - docs/product/OPERATIONAL_EFFECTIVENESS.md
+      - docs/product/READINESS.yaml
+      - docs/product/VALUE_ARCHITECTURE.md only when the claim is supported
+    verification: evidence reference and confidence label
+
+policy:
+  automatic_overwrite_of_human_decisions: prohibited
+  current_implementation: release checks enforce synchronization; fully event-driven document generation is deferred until documentation drift is observed.

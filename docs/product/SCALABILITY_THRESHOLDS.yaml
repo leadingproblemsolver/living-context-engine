@@ -1,0 +1,55 @@
+metadata:
+  status: predicted
+  confidence: 70
+  evidence_refs:
+    - schema.sql
+    - supabase/functions/_shared/auth.ts
+    - supabase/functions/_shared/ai.ts
+
+user_scale:
+  current_limit: single-user workspaces with owner-isolated rows
+  expected_next_limit: team sharing and policy ownership
+  failure_signal: users manually duplicate guardrail sets across accounts
+  threshold: 5 pilot organizations or 20% of active users request sharing
+  required_change: organization and membership model with explicit policy owners
+  do_not_build_before: repeated team-sharing demand
+
+workflow_scale:
+  current_limit: synchronous evaluation of up to 50 active guardrails
+  expected_next_limit: long-running or multi-step external workflows
+  failure_signal: p95 evaluation latency exceeds 20 seconds or requests time out
+  threshold: p95 > 20 seconds over 200 evaluations
+  required_change: asynchronous run state, queue, callback, and idempotency key
+  do_not_build_before: measured latency threshold
+
+data_scale:
+  current_limit: indexed Postgres rows without archival
+  expected_next_limit: large evaluation/event history
+  failure_signal: user-history query p95 exceeds 500 ms or storage cost becomes material
+  threshold: 1 million evaluations or 10 million operational events
+  required_change: retention policy, summary tables, and archival
+  do_not_build_before: threshold forecast within 90 days
+
+model_scale:
+  current_limit: one configured OpenAI-compatible model with per-user quotas
+  expected_next_limit: cost/latency routing and fallback
+  failure_signal: provider errors exceed 2% or model cost exceeds 20% of revenue
+  threshold: 1,000 semantic evaluations per day or 2% weekly provider-failure rate
+  required_change: model routing, fallback, and evaluated prompt/model versions
+  do_not_build_before: stable semantic eval set and measured threshold
+
+operational_scale:
+  current_limit: platform logs plus stored sanitized events
+  expected_next_limit: automated incident alerts and support ownership
+  failure_signal: same production failure occurs three times without detection
+  threshold: 100 daily evaluations or first paying pilot
+  required_change: alert rules, runbook ownership, and incident review
+  do_not_build_before: a real production operator exists
+
+economic_scale:
+  current_limit: unmeasured cost per verified user outcome
+  expected_next_limit: unit economics and plan limits
+  failure_signal: founder support or model cost grows linearly with usage
+  threshold: 10 weekly active users or first paid pilot
+  required_change: cost-per-result dashboard and support-time tracking
+  do_not_build_before: observed repeated use

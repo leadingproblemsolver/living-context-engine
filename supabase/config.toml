@@ -1,0 +1,9 @@
+project_id = "driftguard"
+
+# Modern Supabase publishable keys are not JWTs. Gateway verification is disabled,
+# then every function verifies the user's Bearer token with auth.getUser().
+[functions.infer-guardrails]
+verify_jwt = false
+
+[functions.evaluate]
+verify_jwt = false

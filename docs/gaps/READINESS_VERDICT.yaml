@@ -1,0 +1,120 @@
+metadata:
+  status: observed+inferred
+  confidence: 94
+  target_stage: credible external pilot
+readiness:
+  code_build_readiness_percentage: 90
+  operational_pilot_readiness_percentage: 47
+  production_readiness_percentage: 30
+  current_stage: internal-demo-and-staging-candidate
+  ready_for:
+    - local/internal demonstration
+    - credentialed staging deployment
+    - supervised design-partner sessions using non-sensitive data after immediate claim corrections
+  not_ready_for:
+    - unsupervised external pilot
+    - sensitive or regulated data
+    - production enforcement integrations
+    - claims of verified user outcomes or ROI
+    - team/company deployment
+  critical_blockers:
+    - DG-G001
+    - DG-G002
+    - DG-G003
+    - DG-G004
+    - DG-G005
+    - DG-G006
+    - DG-G007
+    - DG-G008
+  next_single_constraint: Close truth/state-integrity/privacy boundaries, then obtain live semantic and user-outcome evidence.
+  next_three_actions:
+    - Make evaluation read the canonical server policy by set_id/version and stop client-driven policy mutation.
+    - Correct event/readiness/persistence claims and add explicit AI data-use consent.
+    - Deploy staging and run two-user RLS plus semantic benchmark tests before any external pilot.
+  evidence_required_to_advance:
+    - passing two-user RLS/auth staging test
+    - passing 50+ case semantic evaluation report with zero critical false Passes
+    - atomic/idempotent evaluation persistence tests
+    - explicit data processing, retention, deletion and local/cloud conflict tests
+    - at least three observed useful interventions linked to real outcome evidence
+maturity_dimensions:
+  - dimension: Outcome readiness
+    score: 3
+    status: observed
+    confidence: 90
+    evidence: Core verdict/correction implemented; no real outcome capture or semantic benchmark.
+  - dimension: User-workflow readiness
+    score: 3
+    status: observed
+    confidence: 92
+    evidence: Clear three-step path; local/cloud conflict, no history, no feedback loop.
+  - dimension: Data readiness
+    score: 2
+    status: observed
+    confidence: 95
+    evidence: Structured schema/RLS; mutable client policy, no retention/export/versioning.
+  - dimension: Model and reasoning readiness
+    score: 2
+    status: observed
+    confidence: 95
+    evidence: Bounded prompts/output normalization; no labeled eval set, retry, rollout gate.
+  - dimension: Deterministic-control readiness
+    score: 4
+    status: observed
+    confidence: 96
+    evidence: Block precedence and objective rules are enforced and locally tested.
+  - dimension: Orchestration readiness
+    score: 2
+    status: observed
+    confidence: 95
+    evidence: Synchronous path works; no idempotency, partial-write boundary, concurrency control.
+  - dimension: Integration readiness
+    score: 2
+    status: observed
+    confidence: 93
+    evidence: Authenticated endpoint/docs exist; no durable webhook principal or retry contract.
+  - dimension: Human-operations readiness
+    score: 1
+    status: observed
+    confidence: 98
+    evidence: No support owner, incident runbook, escalation SLA, or exception workflow.
+  - dimension: Trust and explainability readiness
+    score: 3
+    status: observed
+    confidence: 93
+    evidence: Verdict trace/mode visible; local snapshot and outcome semantics overclaim.
+  - dimension: Security/privacy/compliance readiness
+    score: 2
+    status: observed
+    confidence: 94
+    evidence: Secret boundaries/RLS design strong; no live isolation proof, consent, retention, deletion.
+  - dimension: Failure/recovery readiness
+    score: 2
+    status: observed
+    confidence: 94
+    evidence: Errors and local fallback exist; degraded mode is transient and state conflicts unresolved.
+  - dimension: Observability readiness
+    score: 2
+    status: observed
+    confidence: 97
+    evidence: Sanitized events exist; failures/alerts/completeness/outcomes absent.
+  - dimension: Evaluation readiness
+    score: 2
+    status: observed
+    confidence: 100
+    evidence: Five deterministic unit tests; no Edge/RLS/semantic/E2E/adversarial suite.
+  - dimension: Economic readiness
+    score: 1
+    status: observed
+    confidence: 98
+    evidence: Metrics are designed but costs, support minutes, and value outcomes are not measured.
+  - dimension: Adoption/distribution readiness
+    score: 2
+    status: inferred
+    confidence: 85
+    evidence: Value proposition is clear; no observed activation, repeat use, buyer proof, or support.
+  - dimension: Presentation readiness
+    score: 4
+    status: observed
+    confidence: 93
+    evidence: Polished, coherent UI; several claims need mode/stage qualification.

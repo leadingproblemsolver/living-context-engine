@@ -1,0 +1,40 @@
+metadata:
+  status: designed
+  confidence: 85
+  evidence_refs:
+    - schema.sql
+    - intelligence/EVENT_SCHEMA.json
+
+metrics:
+  - id: time_to_first_guardrail_set
+    definition: Time from first intent interaction to RULE_UPDATED.
+    target: p50 < 60 seconds
+    source: client analytics plus operational event
+    activation_threshold: pilot
+  - id: evaluation_latency
+    definition: End-to-end latency recorded on OUTCOME_VERIFIED.
+    target: p95 < 20 seconds
+    source: operational_events.latency_ms
+  - id: pass_rate
+    definition: Percentage of evaluations returning Pass.
+    interpretation_warning: A high or low rate is not inherently good; inspect workflow and evidence quality.
+    source: OUTCOME_VERIFIED metadata
+  - id: unclear_rate
+    definition: Percentage of findings marked unclear.
+    target: declining after guardrail refinement without increasing false Passes
+    source: OUTCOME_VERIFIED metadata
+  - id: block_intervention_rate
+    definition: Percentage of checks that stop a violated blocking rule.
+    source: evaluation verdict and findings
+  - id: semantic_provider_failure_rate
+    definition: Failed semantic evaluations divided by semantic model calls.
+    target: "< 2% weekly"
+    source: platform logs; FAILURE_DETECTED event is deferred
+  - id: repeat_use_14d
+    definition: Percentage of users with a second evaluation within 14 days.
+    target: "> 30% during pilot"
+    source: evaluations
+  - id: useful_intervention_rate
+    definition: User-confirmed checks that prevented rework or changed the action.
+    target: establish baseline in pilot
+    source: future USER_CORRECTION_RECEIVED/outcome capture

@@ -1,0 +1,1050 @@
+metadata:
+  system: DriftGuard
+  scan_date: "2026-07-09"
+  target_stage: credible external pilot
+  current_stage: code-validated internal demo / staging candidate
+  compiler: Sociotechnical Gap-Closure & Operational-Readiness Compiler
+  assessment_basis:
+    - uploaded repository source
+    - successful npm ci
+    - successful npm run validate
+    - successful npm run smoke:worker
+    - static code/schema/document review
+    - LLM simulations labeled simulated
+  scoring:
+    risk_priority: severity * probability * (6 - detectability)
+    closure_leverage: (estimated_value * frequency * dependency_depth) / (implementation_complexity + founder_attention_cost)
+    execution_priority: 0.40*risk_priority + 0.35*normalized_closure_leverage + 0.25*(stage_necessity*25)
+gaps:
+  - id: DG-G001
+    title: Readiness documentation overstates pilot readiness
+    gap_type: governance
+    failure_class: misleading
+    priority: P0
+    description:
+      docs/product/READINESS.yaml marks pilot_ready and deployment_ready true although hosted auth, RLS isolation,
+      semantic quality, support, feedback, and real outcome evidence remain unverified.
+    current_state: Code/build validation is strong; operational pilot proof is absent.
+    required_state:
+      Readiness claims distinguish code-ready, staging-ready, pilot-ready, and production-verified using evidence
+      gates.
+    affected_user: Founder, pilot operator, buyer, administrator
+    trigger: Any external presentation or pilot decision
+    user_consequence: Stakeholders may trust a maturity level the system has not earned.
+    system_consequence: Premature deployment and invalid evidence claims.
+    evidence:
+      - docs/product/READINESS.yaml:8-20
+      - RELEASE_REPORT.md:10-15
+      - RELEASE_REPORT.md:58-66
+    status: observed
+    confidence: 99
+    severity: 5
+    frequency: 5
+    probability: 5
+    detectability: 2
+    reversibility: 5
+    dependency_depth: 5
+    founder_attention_cost: 1
+    implementation_complexity: 1
+    estimated_value: 5
+    stage_necessity: 5
+    closure: Change readiness to internal-demo/staging-ready; define executable gates for pilot and production.
+    acceptance: No stage is marked ready unless every required evidence item has a linked passing artifact or test.
+    owner: product/engineering
+    execution_class: documentation+policy
+    human_gate: Founder accepts corrected claim boundary.
+    risk_priority: 100
+    closure_leverage: 62.5
+    normalized_closure_leverage: 125.0
+    execution_priority: 115.0
+  - id: DG-G002
+    title: Evaluation can overwrite the canonical guardrail policy
+    gap_type: deterministic_logic
+    failure_class: fragile
+    priority: P0
+    description:
+      The evaluate function accepts a complete client-supplied workspace and calls save_guardrail_set before judgment.
+      A stale, tampered, or integration-supplied payload can replace newer user-approved rules.
+    current_state: Evaluation and policy mutation share one endpoint and trust the authenticated caller's policy snapshot.
+    required_state:
+      Evaluation loads the canonical set server-side by set_id and expected_version; policy changes occur only
+      through explicit save/approve operations.
+    affected_user: Operator and administrator
+    trigger: Stale browser, retry, integration, or malicious authenticated request
+    user_consequence: A verdict may be produced against silently changed constraints.
+    system_consequence: Source-of-truth integrity and auditability are compromised.
+    evidence:
+      - supabase/functions/evaluate/index.ts:258-313
+      - src/routes/index.tsx:482-492
+      - schema.sql:303-356
+    status: observed
+    confidence: 99
+    severity: 5
+    frequency: 3
+    probability: 4
+    detectability: 2
+    reversibility: 3
+    dependency_depth: 5
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Make evaluate accept set_id, input, expected_policy_version, and idempotency_key; load rules from DB; reject stale
+      versions with 409.
+    acceptance:
+      Submitting altered or stale client guardrails never changes stored policy and never evaluates without the current
+      approved version.
+    owner: backend
+    execution_class: code+schema
+    human_gate: None after policy contract approval.
+    risk_priority: 80
+    closure_leverage: 15.0
+    normalized_closure_leverage: 30.0
+    execution_priority: 73.8
+  - id: DG-G003
+    title: Policy refresh and evaluation audit are not atomic
+    gap_type: orchestration
+    failure_class: fragile
+    priority: P0
+    description:
+      The function commits save_guardrail_set, then separately calls the model and inserts the evaluation. Failure
+      after the save can leave a changed policy with no matching audit, while API docs call the operation transactional.
+    current_state: Multiple network/database operations without one post-model transaction or compensating state.
+    required_state:
+      After AI returns, one database RPC atomically validates policy version and stores the evaluation/events;
+      evaluation must not mutate policy.
+    affected_user: Operator, integrator, administrator
+    trigger: Provider failure, DB insert failure, timeout, or function termination
+    user_consequence: The current rules may change even though the check appears to have failed.
+    system_consequence: Partial writes and misleading audit claims.
+    evidence:
+      - supabase/functions/evaluate/index.ts:286-313
+      - supabase/functions/evaluate/index.ts:438-460
+      - docs/API.md:90
+    status: observed
+    confidence: 99
+    severity: 5
+    frequency: 2
+    probability: 3
+    detectability: 3
+    reversibility: 3
+    dependency_depth: 5
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Separate policy save from evaluation; add atomic record_evaluation RPC for evaluation, findings, events, idempotency,
+      and policy-version check.
+    acceptance:
+      Injected failure at each persistence step leaves either the complete evaluation transaction or no evaluation-side
+      mutation.
+    owner: backend/database
+    execution_class: code+schema+test
+    human_gate: None.
+    risk_priority: 45
+    closure_leverage: 10.0
+    normalized_closure_leverage: 20.0
+    execution_priority: 56.2
+  - id: DG-G004
+    title: Evaluation completion is mislabeled as real-world outcome verification
+    gap_type: observability
+    failure_class: misleading
+    priority: P0
+    description:
+      Every successful judgment emits OUTCOME_VERIFIED even though DriftGuard has not observed whether the user followed
+      the correction or achieved the desired result.
+    current_state: Judgment metadata is recorded as an outcome event and metrics are defined from that event.
+    required_state:
+      Emit EVALUATION_COMPLETED for judgments; emit OUTCOME_VERIFIED only from a separate user/integration confirmation
+      carrying outcome evidence.
+    affected_user: Founder, buyer, analyst, operator
+    trigger: Any dashboard, metric, or product claim based on events
+    user_consequence: Activity can be mistaken for proven value.
+    system_consequence: Contaminated product evidence and invalid learning loops.
+    evidence:
+      - supabase/functions/evaluate/index.ts:482-501
+      - docs/API.md:90
+      - intelligence/METRICS.yaml:8-27
+    status: observed
+    confidence: 100
+    severity: 5
+    frequency: 5
+    probability: 5
+    detectability: 2
+    reversibility: 4
+    dependency_depth: 5
+    founder_attention_cost: 1
+    implementation_complexity: 2
+    estimated_value: 5
+    stage_necessity: 5
+    closure: Rename current event and add explicit outcome-confirmation schema/endpoint.
+    acceptance:
+      No OUTCOME_VERIFIED event exists without actor, observed result, evidence reference, and associated evaluation
+      ID.
+    owner: backend/product analytics
+    execution_class: schema+code+docs
+    human_gate: Define what counts as a verified outcome.
+    risk_priority: 100
+    closure_leverage: 41.666666666666664
+    normalized_closure_leverage: 83.3
+    execution_priority: 100.4
+  - id: DG-G005
+    title: AI processing, storage, and retention consent boundary is missing
+    gap_type: security_privacy
+    failure_class: missing
+    priority: P0
+    description:
+      Submitted work and evidence are sent to the configured AI provider and stored in evaluations, but the product
+      has no explicit pre-call disclosure, data classification, retention choice, or deletion control.
+    current_state: Technical secret boundaries exist; user-facing data-processing governance does not.
+    required_state:
+      Before the first semantic call, disclose provider processing and storage; restrict pilot data to approved
+      classes; define retention and deletion.
+    affected_user: Operator, administrator, buyer
+    trigger: First semantic evaluation or confidential workflow use
+    user_consequence: Users may submit data they were not authorized to share or retain.
+    system_consequence: Privacy, contractual, and trust exposure.
+    evidence:
+      - supabase/functions/evaluate/index.ts:338-360
+      - supabase/functions/evaluate/index.ts:438-456
+      - src/routes/index.tsx:1440-1510
+      - schema.sql:59-78
+    status: observed
+    confidence: 98
+    severity: 5
+    frequency: 4
+    probability: 4
+    detectability: 2
+    reversibility: 2
+    dependency_depth: 5
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Add data-use consent, sensitivity classification, retention policy, delete/export controls, and a local-only mode
+      boundary.
+    acceptance:
+      A new user cannot send semantic content before acknowledging the exact processing/storage policy; deletion removes
+      all owned cloud data.
+    owner: product+security+backend
+    execution_class: policy+ui+schema
+    human_gate: Approve allowed pilot data classes and retention period.
+    risk_priority: 80
+    closure_leverage: 20.0
+    normalized_closure_leverage: 40.0
+    execution_priority: 77.2
+  - id: DG-G006
+    title: Tenant isolation and hosted authentication remain unverified
+    gap_type: security_privacy
+    failure_class: unverified
+    priority: P0
+    description:
+      RLS policies and auth checks are present, but there is no automated two-user database test or successful hosted
+      authentication/function evidence.
+    current_state: Static schema inspection and local compilation only.
+    required_state: Automated RLS tests plus a staging smoke test with two real users and server-authored audits.
+    affected_user: Every cloud user
+    trigger: First external user or account switch
+    user_consequence: Potential exposure cannot be ruled out by evidence.
+    system_consequence: External pilot safety gate remains open.
+    evidence:
+      - schema.sql:190-281
+      - scripts/judgment-contract.test.mjs:1-92
+      - RELEASE_REPORT.md:58-66
+    status: observed
+    confidence: 99
+    severity: 5
+    frequency: 5
+    probability: 3
+    detectability: 2
+    reversibility: 2
+    dependency_depth: 5
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure: Add pgTAP/client integration tests for all RLS policies and complete a two-account staging test.
+    acceptance:
+      User A cannot select/update/delete User B data; browser roles cannot write audits/events; tests run in CI and
+      staging.
+    owner: backend/security
+    execution_class: test+staging
+    human_gate: Provide staging project credentials.
+    risk_priority: 60
+    closure_leverage: 25.0
+    normalized_closure_leverage: 50.0
+    execution_priority: 72.8
+  - id: DG-G007
+    title: Local/cloud synchronization can overwrite unsaved user state
+    gap_type: data
+    failure_class: fragile
+    priority: P0
+    description:
+      On sign-in, the latest cloud set automatically replaces the local workspace and is immediately written back
+      to localStorage. Sign-out intentionally leaves that workspace visible in the browser.
+    current_state: No dirty-state detection, merge choice, account-scoped local key, or shared-device cleanup.
+    required_state: Account-scoped local state, explicit local/cloud conflict resolution, and clear-on-sign-out option.
+    affected_user: Returning operator or shared-device user
+    trigger: Sign-in with existing cloud data or account switching
+    user_consequence: Unsaved local policy may be lost; another browser user may see prior constraints.
+    system_consequence: State integrity and local privacy failures.
+    evidence:
+      - src/routes/index.tsx:235-288
+      - src/routes/index.tsx:317-321
+    status: observed
+    confidence: 99
+    severity: 5
+    frequency: 3
+    probability: 4
+    detectability: 3
+    reversibility: 2
+    dependency_depth: 4
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Namespace local data by user, preserve anonymous draft separately, detect divergence, and require choose/merge
+      before overwrite.
+    acceptance:
+      A test with divergent local and cloud data preserves both until the user explicitly resolves the conflict; sign-out
+      can clear account data.
+    owner: frontend
+    execution_class: code+ui+test
+    human_gate: Choose default conflict policy.
+    risk_priority: 60
+    closure_leverage: 12.0
+    normalized_closure_leverage: 24.0
+    execution_priority: 63.6
+  - id: DG-G008
+    title: Snapshot-retention claims are universal but local previews are not persisted
+    gap_type: presentation
+    failure_class: misleading
+    priority: P0
+    description:
+      The landing page says every verdict retains an exact snapshot, while unsigned local preview results exist only
+      in component memory and are lost on refresh.
+    current_state: Cloud evaluations persist; local previews do not. Marketing does not qualify the distinction.
+    required_state:
+      Either persist local preview history locally or explicitly qualify snapshot/audit claims as authenticated
+      cloud behavior.
+    affected_user: First-time and unsigned user
+    trigger: Using local demo or reading technical-integrity claims
+    user_consequence: User expects auditability that does not exist in that mode.
+    system_consequence: Trust erosion and false capability claim.
+    evidence:
+      - src/routes/index.tsx:764-810
+      - src/routes/index.tsx:1633-1649
+      - src/routes/index.tsx:468-519
+    status: observed
+    confidence: 99
+    severity: 4
+    frequency: 5
+    probability: 5
+    detectability: 2
+    reversibility: 5
+    dependency_depth: 3
+    founder_attention_cost: 1
+    implementation_complexity: 1
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Add persistent mode-specific copy and a visible capability matrix; optionally retain local previews in account-scoped
+      IndexedDB.
+    acceptance:
+      Every persistence claim states the applicable mode; refreshing local preview does not imply a retained audit
+      unless implemented.
+    owner: product/frontend
+    execution_class: copy+ui
+    human_gate: Choose whether local history is in scope.
+    risk_priority: 80
+    closure_leverage: 37.5
+    normalized_closure_leverage: 75.0
+    execution_priority: 89.5
+  - id: DG-G009
+    title: Semantic judgment quality has no realistic evaluation set
+    gap_type: evaluation
+    failure_class: unverified
+    priority: P1
+    description:
+      Five tests cover only the local deterministic engine. There are no labeled semantic cases, prompt-injection
+      cases, missing-finding cases, model-version regressions, or false-pass measurements.
+    current_state: Prompts and normalization are reasonable but quality is asserted from design.
+    required_state:
+      Versioned labeled corpus with expected finding status/verdict and human rubric; run against every model/prompt
+      change.
+    affected_user: Operator and buyer
+    trigger: Any semantic guardrail
+    user_consequence: False Pass, false Block, or unstable explanations may go unnoticed.
+    system_consequence: Core value quality is unknowable.
+    evidence:
+      - scripts/judgment-contract.test.mjs:1-92
+      - supabase/functions/evaluate/index.ts:336-389
+      - docs/product/READINESS.yaml:21-27
+    status: observed
+    confidence: 100
+    severity: 5
+    frequency: 5
+    probability: 4
+    detectability: 2
+    reversibility: 3
+    dependency_depth: 5
+    founder_attention_cost: 3
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure:
+      Create 50+ labeled cases including adversarial and ambiguous inputs; define zero critical false-Pass tolerance
+      for pilot.
+    acceptance: Pinned model/prompt meets agreed false-Pass, false-Block, completeness, latency, and JSON-validity thresholds.
+    owner: product+ML evaluation
+    execution_class: dataset+test
+    human_gate: Domain reviewer labels expected results.
+    risk_priority: 80
+    closure_leverage: 20.833333333333332
+    normalized_closure_leverage: 41.7
+    execution_priority: 77.8
+  - id: DG-G010
+    title: No actual outcome, correction acceptance, or override capture
+    gap_type: outcome
+    failure_class: missing
+    priority: P1
+    description:
+      The system returns a correction but cannot record whether the user accepted it, changed the action, overrode
+      the verdict, or achieved the desired result.
+    current_state: Evaluation activity is stored; real-world effect is absent.
+    required_state: Outcome confirmation workflow linked to evaluation, with correction/override reason and evidence.
+    affected_user: Operator, lead, buyer, product team
+    trigger: After a Watch or Block, or after the real workflow completes
+    user_consequence: No learning loop or proof that DriftGuard reduced drift.
+    system_consequence: Cannot validate inelastic value, useful intervention rate, or false positives.
+    evidence:
+      - schema.sql:1-114
+      - src/routes/index.tsx:1540-1602
+      - intelligence/METRICS.yaml:24-32
+    status: observed
+    confidence: 100
+    severity: 5
+    frequency: 5
+    probability: 5
+    detectability: 1
+    reversibility: 5
+    dependency_depth: 5
+    founder_attention_cost: 3
+    implementation_complexity: 3
+    estimated_value: 5
+    stage_necessity: 5
+    closure: Add evaluation_outcomes table and a minimal 'What happened?' confirmation after the workflow boundary.
+    acceptance: Pilot metrics distinguish evaluation, user action, override, and independently evidenced outcome.
+    owner: product+backend+frontend
+    execution_class: schema+ui+workflow
+    human_gate: Define minimal proof for each pilot use case.
+    risk_priority: 125
+    closure_leverage: 20.833333333333332
+    normalized_closure_leverage: 41.7
+    execution_priority: 95.8
+  - id: DG-G011
+    title: Hosted end-to-end path is not verified
+    gap_type: deployment
+    failure_class: unverified
+    priority: P1
+    description:
+      Local install, build, Edge bundle, and Worker smoke pass; schema push, functions, SMTP magic link, provider
+      call, and production origins have not been exercised together.
+    current_state: Deployment-ready source, no credential-bound staging proof.
+    required_state: Repeatable staging deployment and scripted nine-step smoke record.
+    affected_user: Administrator and pilot operator
+    trigger: First staging or production deployment
+    user_consequence: Authentication or cloud evaluation may fail despite local green checks.
+    system_consequence: Unknown integration and configuration defects.
+    evidence:
+      - RELEASE_REPORT.md:10-15
+      - RELEASE_REPORT.md:58-66
+      - README.md deployment sections
+    status: observed
+    confidence: 100
+    severity: 5
+    frequency: 5
+    probability: 4
+    detectability: 3
+    reversibility: 4
+    dependency_depth: 5
+    founder_attention_cost: 3
+    implementation_complexity: 2
+    estimated_value: 5
+    stage_necessity: 5
+    closure: Deploy staging, configure SMTP/provider/origins, execute scripted smoke, save evidence.
+    acceptance: Fresh user completes sign-in, save, infer, evaluate, history read, sign-out, and two-user isolation in staging.
+    owner: devops/backend
+    execution_class: deployment+test
+    human_gate: Provide accounts and credentials.
+    risk_priority: 60
+    closure_leverage: 25.0
+    normalized_closure_leverage: 50.0
+    execution_priority: 72.8
+  - id: DG-G012
+    title: API/webhook mode lacks a durable integration and idempotency contract
+    gap_type: integration
+    failure_class: incomplete
+    priority: P1
+    description:
+      The endpoint requires an expiring user access token, accepts an entire mutable workspace, and has no idempotency
+      key or stable external event ID. The UI exposes API/webhook as an input mode.
+    current_state: Suitable for an authenticated browser or closely controlled relay, not a durable unattended webhook.
+    required_state:
+      Explicit integration principal/API key strategy, set_id-only contract, scopes, idempotency, retry semantics,
+      and rotation.
+    affected_user: Developer/integrator and administrator
+    trigger: Automated before-action/after-output/daily integration
+    user_consequence: Automation breaks on token expiry or duplicates checks.
+    system_consequence: Unreliable and unsafe integration behavior.
+    evidence:
+      - docs/API.md:11-25
+      - src/routes/index.tsx:1000-1032
+      - supabase/functions/evaluate/index.ts:248-313
+    status: observed
+    confidence: 99
+    severity: 4
+    frequency: 4
+    probability: 4
+    detectability: 3
+    reversibility: 4
+    dependency_depth: 4
+    founder_attention_cost: 3
+    implementation_complexity: 4
+    estimated_value: 4
+    stage_necessity: 4
+    closure:
+      For pilot, support only browser/manual and one documented internal relay; defer generic webhooks or add scoped
+      integration credentials and idempotency.
+    acceptance:
+      A documented integration survives token rotation/retry and duplicate delivery without policy mutation or duplicate
+      audit.
+    owner: backend/integrations
+    execution_class: architecture+code
+    human_gate: Choose supported pilot integration boundary.
+    risk_priority: 48
+    closure_leverage: 9.142857142857142
+    normalized_closure_leverage: 18.3
+    execution_priority: 50.6
+  - id: DG-G013
+    title: No user-visible evaluation history, audit replay, or comparison
+    gap_type: workflow
+    failure_class: incomplete
+    priority: P2
+    description:
+      Evaluations are queryable by the user in the database, but the UI never loads them. The user cannot revisit
+      a verdict, compare policy snapshots, or prove what changed.
+    current_state: Server audit exists only as backend data.
+    required_state: Minimal history list and detail view with mode, policy snapshot, findings, correction, and outcome state.
+    affected_user: Operator, lead, administrator
+    trigger: Return use, dispute, audit, or learning
+    user_consequence: Must reconstruct prior context manually.
+    system_consequence: Low repeat-use value and inaccessible explainability.
+    evidence:
+      - schema.sql:262-266
+      - src/routes/index.tsx:255-288
+      - src/routes/index.tsx:468-519
+    status: observed
+    confidence: 100
+    severity: 4
+    frequency: 4
+    probability: 5
+    detectability: 1
+    reversibility: 5
+    dependency_depth: 3
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 4
+    stage_necessity: 4
+    closure: Add recent evaluations and a single evaluation detail/replay surface after outcome capture schema is stable.
+    acceptance:
+      Signed-in user can retrieve only their evaluations, open exact snapshot, and rerun as a new evaluation without
+      mutating the original.
+    owner: frontend+backend
+    execution_class: ui+query+test
+    human_gate: None.
+    risk_priority: 100
+    closure_leverage: 9.6
+    normalized_closure_leverage: 19.2
+    execution_priority: 71.7
+  - id: DG-G014
+    title: Degraded-mode fallback is too easy to miss
+    gap_type: failure_recovery
+    failure_class: fragile
+    priority: P2
+    description:
+      If AI/cloud evaluation fails, the browser silently substitutes local preview and shows only a short flash plus
+      a small footer mode label.
+    current_state: Safe fallback usually prevents semantic Pass, but mode degradation is transient and not acknowledged.
+    required_state:
+      Persistent degraded-mode banner, explicit retry, provider error category, and action gate for high-impact
+      checks.
+    affected_user: Operator under time pressure
+    trigger: Provider, network, auth, or Edge failure
+    user_consequence: May mistake a weaker preview for the intended semantic judgment.
+    system_consequence: Trust and decision-quality variance.
+    evidence:
+      - src/routes/index.tsx:478-519
+      - src/routes/index.tsx:1587-1601
+    status: observed
+    confidence: 98
+    severity: 4
+    frequency: 3
+    probability: 4
+    detectability: 3
+    reversibility: 4
+    dependency_depth: 3
+    founder_attention_cost: 2
+    implementation_complexity: 2
+    estimated_value: 4
+    stage_necessity: 4
+    closure: Keep result mode visible at verdict level, require acknowledgment for degraded Block/Watch, and add retry.
+    acceptance:
+      A forced provider outage cannot produce a result visually confusable with AI mode; user can retry without losing
+      input.
+    owner: frontend
+    execution_class: ui+test
+    human_gate: Define high-impact mode policy.
+    risk_priority: 48
+    closure_leverage: 9.0
+    normalized_closure_leverage: 18.0
+    execution_priority: 50.5
+  - id: DG-G015
+    title: Operational telemetry omits failures and can silently disappear
+    gap_type: observability
+    failure_class: incomplete
+    priority: P2
+    description:
+      Operational event insertion is best-effort and only logs success-heavy events. Function exceptions return errors
+      without FAILURE_DETECTED events, alerts, or health aggregation.
+    current_state: Useful sanitized success telemetry, no reliable incident signal.
+    required_state: Failure event path, provider/error classification, alert thresholds, and periodic completeness check.
+    affected_user: Administrator and support owner
+    trigger: Model, DB, auth, integration, or telemetry failure
+    user_consequence: Silent recurring failures persist until users report them.
+    system_consequence: No operational learning or incident detection.
+    evidence:
+      - supabase/functions/_shared/events.ts:25-39
+      - supabase/functions/evaluate/index.ts:521-523
+      - supabase/functions/infer-guardrails/index.ts:183-185
+      - intelligence/METRICS.yaml:19-23
+    status: observed
+    confidence: 100
+    severity: 4
+    frequency: 3
+    probability: 4
+    detectability: 2
+    reversibility: 4
+    dependency_depth: 4
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 4
+    stage_necessity: 4
+    closure:
+      Emit sanitized FAILURE_DETECTED events in catch paths, add event-delivery health metric, and define one pilot alert
+      route.
+    acceptance: Injected failures appear with request_id, stage, stable code, and alert; no raw work/evidence appears in telemetry.
+    owner: backend/operations
+    execution_class: code+monitoring
+    human_gate: Assign alert recipient and response time.
+    risk_priority: 64
+    closure_leverage: 9.6
+    normalized_closure_leverage: 19.2
+    execution_priority: 57.3
+  - id: DG-G016
+    title: Rule versioning and concurrent-edit protection are not implemented
+    gap_type: data
+    failure_class: incomplete
+    priority: P2
+    description:
+      Guardrails have a version column, but saves delete and recreate the list with default version 1. Guardrail
+      sets lack a policy version/ETag and updates are last-write-wins.
+    current_state: Evaluation snapshots retain historical content, but current policy lineage and concurrent edits are not controlled.
+    required_state: Monotonic policy_version, optimistic concurrency, and explicit change record.
+    affected_user: Returning user, multi-device user, future teams
+    trigger: Concurrent or stale save
+    user_consequence: Newer changes can be overwritten without warning.
+    system_consequence: Policy lineage and audit interpretation become ambiguous.
+    evidence:
+      - schema.sql:46-56
+      - schema.sql:303-356
+      - src/routes/index.tsx:425-466
+    status: observed
+    confidence: 99
+    severity: 4
+    frequency: 3
+    probability: 4
+    detectability: 3
+    reversibility: 3
+    dependency_depth: 4
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 4
+    stage_necessity: 4
+    closure: Add guardrail_sets.policy_version and update RPC requiring expected version; append policy_change event.
+    acceptance: Two clients saving the same version cause one success and one 409 conflict; no silent overwrite.
+    owner: backend/frontend
+    execution_class: schema+code+test
+    human_gate: None.
+    risk_priority: 48
+    closure_leverage: 9.6
+    normalized_closure_leverage: 19.2
+    execution_priority: 50.9
+  - id: DG-G017
+    title: Cloud data deletion, export, and retention controls are absent
+    gap_type: governance
+    failure_class: missing
+    priority: P2
+    description:
+      Raw inputs, evidence, findings, and snapshots persist with no user-facing export/delete path, account deletion
+      workflow, or retention job.
+    current_state: Cascade deletion exists if auth user is deleted, but the product exposes no control or policy.
+    required_state: Documented retention, per-workspace/evaluation deletion where audit policy allows, export, and account deletion.
+    affected_user: Operator, administrator, buyer
+    trigger: Sensitive submission, user departure, or compliance request
+    user_consequence: Cannot control or retrieve their stored information.
+    system_consequence: Governance and support burden.
+    evidence:
+      - schema.sql:5-114
+      - src/routes/index.tsx:317-321
+      - ENVIRONMENT.md and README.md lack retention workflow
+    status: observed
+    confidence: 98
+    severity: 4
+    frequency: 3
+    probability: 4
+    detectability: 2
+    reversibility: 2
+    dependency_depth: 3
+    founder_attention_cost: 3
+    implementation_complexity: 3
+    estimated_value: 4
+    stage_necessity: 4
+    closure: Define pilot retention, add export and account/workspace deletion workflow, and test cascades.
+    acceptance: User export is complete; deletion removes owned rows and local account state within defined time.
+    owner: product+backend
+    execution_class: policy+schema+ui
+    human_gate: Approve retention and audit-deletion policy.
+    risk_priority: 64
+    closure_leverage: 6.0
+    normalized_closure_leverage: 12.0
+    execution_priority: 54.8
+  - id: DG-G018
+    title: Human support, exception ownership, and incident response are unassigned
+    gap_type: human_operations
+    failure_class: unowned
+    priority: P2
+    description:
+      The repo has deployment and technical docs but no named pilot support channel, response time, exception owner,
+      model-quality reviewer, or incident runbook.
+    current_state: Founder/engineer implicitly owns everything.
+    required_state: Minimal pilot operating model with initiation, verification, support, escalation, and incident owners.
+    affected_user: Pilot operator and administrator
+    trigger: Auth failure, false verdict, data concern, or outage
+    user_consequence: No predictable recovery or accountability.
+    system_consequence: Founder attention grows linearly and failures remain unresolved.
+    evidence:
+      - "Repository file inventory: no RUNBOOKS.md, INCIDENTS.md, SUPPORT.md or ownership matrix"
+      - docs/product/CORE_WORKFLOW.yaml
+    status: observed
+    confidence: 100
+    severity: 4
+    frequency: 3
+    probability: 5
+    detectability: 2
+    reversibility: 5
+    dependency_depth: 3
+    founder_attention_cost: 4
+    implementation_complexity: 2
+    estimated_value: 4
+    stage_necessity: 4
+    closure: Create pilot runbook, support channel, severity rules, response targets, and owner matrix.
+    acceptance: Every P0/P1 failure has a named owner, contact path, response target, and recovery procedure tested once.
+    owner: founder/operations
+    execution_class: operations+docs
+    human_gate: Assign real people.
+    risk_priority: 80
+    closure_leverage: 6.0
+    normalized_closure_leverage: 12.0
+    execution_priority: 61.2
+  - id: DG-G019
+    title: Model provider retry, fallback, and rollout policy is missing
+    gap_type: model
+    failure_class: fragile
+    priority: P2
+    description:
+      The AI adapter makes one synchronous provider call. There is no retry for transient errors, secondary model,
+      canary, rollback, or model/prompt evaluation gate.
+    current_state: Timeout and stable errors exist; browser fallback is local preview.
+    required_state: Bounded retry for safe transient failures, pinned model/prompt version, evaluation gate, and rollback procedure.
+    affected_user: Semantic-evaluation user
+    trigger: Rate limit, provider outage, model retirement, or quality regression
+    user_consequence: Failed or inconsistent checks.
+    system_consequence: Reliability depends on one provider/model behavior.
+    evidence:
+      - supabase/functions/_shared/ai.ts:55-145
+      - supabase/functions/evaluate/index.ts:336-370
+    status: observed
+    confidence: 99
+    severity: 4
+    frequency: 3
+    probability: 4
+    detectability: 3
+    reversibility: 4
+    dependency_depth: 3
+    founder_attention_cost: 3
+    implementation_complexity: 3
+    estimated_value: 3
+    stage_necessity: 3
+    closure:
+      Add one bounded retry for 429/5xx, record prompt/model version, and require benchmark pass before model change;
+      defer multi-provider fallback until pilot need.
+    acceptance:
+      Transient failure test retries once without duplicate audit; model version changes cannot deploy without evaluation
+      report.
+    owner: backend/ML operations
+    execution_class: code+policy+test
+    human_gate: Approve fallback cost/latency.
+    risk_priority: 48
+    closure_leverage: 4.5
+    normalized_closure_leverage: 9.0
+    execution_priority: 41.1
+  - id: DG-G020
+    title: Input modes and cadence are mostly labels, not configured workflows
+    gap_type: workflow
+    failure_class: incomplete
+    priority: P3
+    description:
+      Prompt, checklist, metric, API, and cadence values are stored, but the in-app flow is largely the same and
+      no scheduler/adapter is created from these settings.
+    current_state: Useful intent metadata and progressive disclosure; limited operational effect.
+    required_state: Either narrow the choices to implemented behavior or supply mode-specific setup and integration handoff.
+    affected_user: Operator and integrator
+    trigger: Selecting checklist, metric, API, before-action, after-output, or daily
+    user_consequence: Configuration appears more operational than it is.
+    system_consequence: Support questions and expectation mismatch.
+    evidence:
+      - src/routes/index.tsx:997-1032
+      - schema.sql:20-29
+    status: observed
+    confidence: 99
+    severity: 3
+    frequency: 4
+    probability: 5
+    detectability: 3
+    reversibility: 5
+    dependency_depth: 2
+    founder_attention_cost: 2
+    implementation_complexity: 2
+    estimated_value: 3
+    stage_necessity: 3
+    closure:
+      For pilot, retain manual + structured modes and label integration values as templates; add adapters only after
+      a validated channel.
+    acceptance: Every selectable mode produces a visibly different supported flow or is explicitly marked configuration-only.
+    owner: product/frontend
+    execution_class: scope+ui
+    human_gate: Choose pilot modes.
+    risk_priority: 45
+    closure_leverage: 6.0
+    normalized_closure_leverage: 12.0
+    execution_priority: 41.0
+  - id: DG-G021
+    title: Only the latest workspace is accessible
+    gap_type: adoption_distribution
+    failure_class: incomplete
+    priority: P3
+    description:
+      The database can hold multiple sets, but sign-in loads only the most recently updated set and the UI has no
+      list, switch, duplicate, archive, or delete surface.
+    current_state: One active workspace is usable; older records become effectively hidden.
+    required_state: For repeated multi-workflow use, provide a minimal workspace selector and archive/delete.
+    affected_user: Repeat operator
+    trigger: Second workflow or returning to an older policy
+    user_consequence: Cannot reliably reuse or manage prior workflows.
+    system_consequence: Low repeat-use ceiling and orphaned data.
+    evidence:
+      - src/routes/index.tsx:260-280
+      - schema.sql:18-34
+    status: observed
+    confidence: 100
+    severity: 3
+    frequency: 3
+    probability: 4
+    detectability: 2
+    reversibility: 5
+    dependency_depth: 2
+    founder_attention_cost: 2
+    implementation_complexity: 3
+    estimated_value: 3
+    stage_necessity: 2
+    closure: Defer until pilot shows multi-workflow demand; then add list/switch/archive, not a dashboard.
+    acceptance: User can see and open all owned sets without losing current local edits.
+    owner: frontend/backend
+    execution_class: ui+query
+    human_gate: Pilot evidence threshold.
+    risk_priority: 48
+    closure_leverage: 3.6
+    normalized_closure_leverage: 7.2
+    execution_priority: 34.2
+  - id: DG-G022
+    title: Economic and adoption metrics are designed but not operational
+    gap_type: economics
+    failure_class: incomplete
+    priority: P3
+    description:
+      Metrics YAML defines time to value, repeat use, useful intervention, and provider failure, but required client
+      events/outcome events/cost calculations are absent.
+    current_state: Measurement design without a complete event source.
+    required_state:
+      Emit activation and outcome events; calculate cost per evaluation and useful intervention; measure support
+      minutes.
+    affected_user: Founder and buyer
+    trigger: Pilot review, pricing, or scale decision
+    user_consequence: No credible evidence of value or operational cost.
+    system_consequence: Cannot prioritize, price, or decide whether to continue.
+    evidence:
+      - intelligence/METRICS.yaml:1-32
+      - supabase/functions/_shared/events.ts:1-39
+    status: observed
+    confidence: 100
+    severity: 3
+    frequency: 4
+    probability: 5
+    detectability: 1
+    reversibility: 5
+    dependency_depth: 3
+    founder_attention_cost: 3
+    implementation_complexity: 2
+    estimated_value: 4
+    stage_necessity: 3
+    closure: After event truth correction and outcome capture, implement a pilot report query—not a dashboard.
+    acceptance:
+      Pilot report computes activation, repeat use, false passes/blocks, useful intervention, latency, AI cost, and
+      support time from traceable events.
+    owner: product analytics
+    execution_class: query+measurement
+    human_gate: Define pilot success thresholds.
+    risk_priority: 75
+    closure_leverage: 9.6
+    normalized_closure_leverage: 19.2
+    execution_priority: 55.5
+  - id: DG-G023
+    title: Setup-time and value claims are unvalidated
+    gap_type: presentation
+    failure_class: unverified
+    priority: P3
+    description:
+      The hero claims setup in under 60 seconds and strong workflow relief without observed user timing or comparison
+      with current workaround.
+    current_state: Clear interface and plausible claim, no behavioral evidence.
+    required_state: Measure first-use comprehension, setup completion, time to first verdict, and useful intervention.
+    affected_user: Prospect, operator, buyer
+    trigger: Marketing or onboarding
+    user_consequence: Expectation may not match actual effort or benefit.
+    system_consequence: Weak positioning evidence and possible trust loss.
+    evidence:
+      - src/routes/index.tsx:542-570
+      - docs/product/OPERATIONAL_EFFECTIVENESS.md:6-17
+    status: observed
+    confidence: 98
+    severity: 3
+    frequency: 5
+    probability: 4
+    detectability: 3
+    reversibility: 5
+    dependency_depth: 2
+    founder_attention_cost: 2
+    implementation_complexity: 1
+    estimated_value: 3
+    stage_necessity: 3
+    closure: Qualify as target until measured; instrument first-use timing and run 5-10 observed sessions.
+    acceptance: Claim is retained only if p50 setup and comprehension meet the threshold with defined starting conditions.
+    owner: product/research
+    execution_class: copy+measurement
+    human_gate: None.
+    risk_priority: 36
+    closure_leverage: 10.0
+    normalized_closure_leverage: 20.0
+    execution_priority: 40.1
+  - id: DG-G024
+    title: Organization tenancy, roles, and policy delegation are absent
+    gap_type: security_privacy
+    failure_class: missing
+    priority: P4
+    description:
+      All data is user-owned; there is no organization, team, role, delegated administrator, shared policy, or separation
+      of operator and policy owner.
+    current_state: Appropriate single-user architecture for MVP.
+    required_state: "Only if team demand is validated: organization tenancy, membership, RBAC, policy ownership, and audit roles."
+    affected_user: Operational lead, administrator, enterprise buyer
+    trigger: First team/company deployment
+    user_consequence: Cannot safely share or govern common guardrails.
+    system_consequence: Single-user ceiling.
+    evidence:
+      - schema.sql:5-114
+      - docs/product/AUDIENCE_MAP.yaml
+    status: observed
+    confidence: 100
+    severity: 3
+    frequency: 1
+    probability: 3
+    detectability: 5
+    reversibility: 4
+    dependency_depth: 2
+    founder_attention_cost: 5
+    implementation_complexity: 5
+    estimated_value: 3
+    stage_necessity: 2
+    closure: Do not build before two pilot organizations request shared policy/roles.
+    acceptance: Threshold reached and tenancy threat model approved before implementation.
+    owner: product/architecture
+    execution_class: deferred architecture
+    human_gate: Validated demand.
+    risk_priority: 9
+    closure_leverage: 0.6
+    normalized_closure_leverage: 1.2
+    execution_priority: 16.5
+  - id: DG-G025
+    title: Scale SLOs, queueing, backup/restore, and disaster recovery are unverified
+    gap_type: orchestration
+    failure_class: missing
+    priority: P4
+    description:
+      Per-user quotas and indexes exist, but there are no load tests, queue, concurrency limits, backup restore drill,
+      SLOs, or incident rotation.
+    current_state: Synchronous low-volume design suitable for bounded pilot.
+    required_state: Threshold-triggered load testing, SLOs, queue/retry where needed, restore drill, and on-call ownership.
+    affected_user: Future production users and operator
+    trigger: Volume, team use, or contractual availability requirements
+    user_consequence: Degradation or data recovery uncertainty at scale.
+    system_consequence: Uncontrolled production risk.
+    evidence:
+      - schema.sql:116-136
+      - docs/product/SCALABILITY_THRESHOLDS.yaml
+      - package.json scripts
+    status: observed
+    confidence: 98
+    severity: 4
+    frequency: 1
+    probability: 3
+    detectability: 4
+    reversibility: 3
+    dependency_depth: 2
+    founder_attention_cost: 5
+    implementation_complexity: 5
+    estimated_value: 3
+    stage_necessity: 2
+    closure: Defer until pilot thresholds; first define measured triggers and perform a database restore drill before production.
+    acceptance: Measured threshold reached; load and restore tests pass against explicit SLO/RPO/RTO.
+    owner: operations/architecture
+    execution_class: deferred ops
+    human_gate: Production commitment.
+    risk_priority: 24
+    closure_leverage: 0.6
+    normalized_closure_leverage: 1.2
+    execution_priority: 22.5

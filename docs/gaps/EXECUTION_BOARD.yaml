@@ -1,0 +1,354 @@
+execution_order:
+  - rank: 1
+    gap_id: DG-G001
+    priority: P0
+    action: Change readiness to internal-demo/staging-ready; define executable gates for pilot and production.
+    why_now:
+      docs/product/READINESS.yaml marks pilot_ready and deployment_ready true although hosted auth, RLS isolation, semantic
+      quality, support, feedback, and real outcome evidence remain unverified.
+    blocked_by: []
+    owner: product/engineering
+    completion_evidence: No stage is marked ready unless every required evidence item has a linked passing artifact or test.
+    do_not_start_until: immediately
+  - rank: 2
+    gap_id: DG-G004
+    priority: P0
+    action: Rename current event and add explicit outcome-confirmation schema/endpoint.
+    why_now:
+      Every successful judgment emits OUTCOME_VERIFIED even though DriftGuard has not observed whether the user followed
+      the correction or achieved the desired result.
+    blocked_by: []
+    owner: backend/product analytics
+    completion_evidence:
+      No OUTCOME_VERIFIED event exists without actor, observed result, evidence reference, and associated
+      evaluation ID.
+    do_not_start_until: immediately
+  - rank: 3
+    gap_id: DG-G008
+    priority: P0
+    action:
+      Add persistent mode-specific copy and a visible capability matrix; optionally retain local previews in account-scoped
+      IndexedDB.
+    why_now:
+      The landing page says every verdict retains an exact snapshot, while unsigned local preview results exist only
+      in component memory and are lost on refresh.
+    blocked_by: []
+    owner: product/frontend
+    completion_evidence:
+      Every persistence claim states the applicable mode; refreshing local preview does not imply a retained
+      audit unless implemented.
+    do_not_start_until: immediately
+  - rank: 4
+    gap_id: DG-G002
+    priority: P0
+    action:
+      Make evaluate accept set_id, input, expected_policy_version, and idempotency_key; load rules from DB; reject stale
+      versions with 409.
+    why_now:
+      The evaluate function accepts a complete client-supplied workspace and calls save_guardrail_set before judgment.
+      A stale, tampered, or integration-supplied payload can replace newer user-approved rules.
+    blocked_by: []
+    owner: backend
+    completion_evidence:
+      Submitting altered or stale client guardrails never changes stored policy and never evaluates without
+      the current approved version.
+    do_not_start_until: immediately
+  - rank: 5
+    gap_id: DG-G003
+    priority: P0
+    action:
+      Separate policy save from evaluation; add atomic record_evaluation RPC for evaluation, findings, events, idempotency,
+      and policy-version check.
+    why_now:
+      The function commits save_guardrail_set, then separately calls the model and inserts the evaluation. Failure after
+      the save can leave a changed policy with no matching audit, while API docs call the operation transactional.
+    blocked_by:
+      - DG-G002
+    owner: backend/database
+    completion_evidence:
+      Injected failure at each persistence step leaves either the complete evaluation transaction or no evaluation-side
+      mutation.
+    do_not_start_until: DG-G002
+  - rank: 6
+    gap_id: DG-G005
+    priority: P0
+    action:
+      Add data-use consent, sensitivity classification, retention policy, delete/export controls, and a local-only mode
+      boundary.
+    why_now:
+      Submitted work and evidence are sent to the configured AI provider and stored in evaluations, but the product has
+      no explicit pre-call disclosure, data classification, retention choice, or deletion control.
+    blocked_by: []
+    owner: product+security+backend
+    completion_evidence:
+      A new user cannot send semantic content before acknowledging the exact processing/storage policy; deletion
+      removes all owned cloud data.
+    do_not_start_until: immediately
+  - rank: 7
+    gap_id: DG-G006
+    priority: P0
+    action: Add pgTAP/client integration tests for all RLS policies and complete a two-account staging test.
+    why_now:
+      RLS policies and auth checks are present, but there is no automated two-user database test or successful hosted
+      authentication/function evidence.
+    blocked_by:
+      - staging credentials
+    owner: backend/security
+    completion_evidence:
+      User A cannot select/update/delete User B data; browser roles cannot write audits/events; tests run
+      in CI and staging.
+    do_not_start_until: staging credentials
+  - rank: 8
+    gap_id: DG-G007
+    priority: P0
+    action:
+      Namespace local data by user, preserve anonymous draft separately, detect divergence, and require choose/merge before
+      overwrite.
+    why_now:
+      On sign-in, the latest cloud set automatically replaces the local workspace and is immediately written back to
+      localStorage. Sign-out intentionally leaves that workspace visible in the browser.
+    blocked_by: []
+    owner: frontend
+    completion_evidence:
+      A test with divergent local and cloud data preserves both until the user explicitly resolves the conflict;
+      sign-out can clear account data.
+    do_not_start_until: immediately
+  - rank: 9
+    gap_id: DG-G009
+    priority: P1
+    action:
+      Create 50+ labeled cases including adversarial and ambiguous inputs; define zero critical false-Pass tolerance for
+      pilot.
+    why_now:
+      Five tests cover only the local deterministic engine. There are no labeled semantic cases, prompt-injection cases,
+      missing-finding cases, model-version regressions, or false-pass measurements.
+    blocked_by:
+      - approved pilot use-case rubric
+    owner: product+ML evaluation
+    completion_evidence:
+      Pinned model/prompt meets agreed false-Pass, false-Block, completeness, latency, and JSON-validity
+      thresholds.
+    do_not_start_until: approved pilot use-case rubric
+  - rank: 10
+    gap_id: DG-G011
+    priority: P1
+    action: Deploy staging, configure SMTP/provider/origins, execute scripted smoke, save evidence.
+    why_now:
+      Local install, build, Edge bundle, and Worker smoke pass; schema push, functions, SMTP magic link, provider call,
+      and production origins have not been exercised together.
+    blocked_by:
+      - staging credentials
+      - SMTP
+      - AI provider key
+      - Cloudflare account
+    owner: devops/backend
+    completion_evidence:
+      Fresh user completes sign-in, save, infer, evaluate, history read, sign-out, and two-user isolation
+      in staging.
+    do_not_start_until: staging credentials, SMTP, AI provider key, Cloudflare account
+  - rank: 11
+    gap_id: DG-G010
+    priority: P1
+    action: Add evaluation_outcomes table and a minimal 'What happened?' confirmation after the workflow boundary.
+    why_now:
+      The system returns a correction but cannot record whether the user accepted it, changed the action, overrode the
+      verdict, or achieved the desired result.
+    blocked_by:
+      - DG-G004
+      - DG-G003
+    owner: product+backend+frontend
+    completion_evidence: Pilot metrics distinguish evaluation, user action, override, and independently evidenced outcome.
+    do_not_start_until: DG-G004, DG-G003
+  - rank: 12
+    gap_id: DG-G012
+    priority: P1
+    action:
+      For pilot, support only browser/manual and one documented internal relay; defer generic webhooks or add scoped integration
+      credentials and idempotency.
+    why_now:
+      The endpoint requires an expiring user access token, accepts an entire mutable workspace, and has no idempotency
+      key or stable external event ID. The UI exposes API/webhook as an input mode.
+    blocked_by:
+      - DG-G002
+      - DG-G003
+      - DG-G006
+    owner: backend/integrations
+    completion_evidence:
+      A documented integration survives token rotation/retry and duplicate delivery without policy mutation
+      or duplicate audit.
+    do_not_start_until: DG-G002, DG-G003, DG-G006
+  - rank: 13
+    gap_id: DG-G014
+    priority: P2
+    action: Keep result mode visible at verdict level, require acknowledgment for degraded Block/Watch, and add retry.
+    why_now:
+      If AI/cloud evaluation fails, the browser silently substitutes local preview and shows only a short flash plus
+      a small footer mode label.
+    blocked_by: []
+    owner: frontend
+    completion_evidence:
+      A forced provider outage cannot produce a result visually confusable with AI mode; user can retry without
+      losing input.
+    do_not_start_until: immediately
+  - rank: 14
+    gap_id: DG-G015
+    priority: P2
+    action:
+      Emit sanitized FAILURE_DETECTED events in catch paths, add event-delivery health metric, and define one pilot alert
+      route.
+    why_now:
+      Operational event insertion is best-effort and only logs success-heavy events. Function exceptions return errors
+      without FAILURE_DETECTED events, alerts, or health aggregation.
+    blocked_by:
+      - DG-G004
+    owner: backend/operations
+    completion_evidence:
+      Injected failures appear with request_id, stage, stable code, and alert; no raw work/evidence appears
+      in telemetry.
+    do_not_start_until: DG-G004
+  - rank: 15
+    gap_id: DG-G016
+    priority: P2
+    action: Add guardrail_sets.policy_version and update RPC requiring expected version; append policy_change event.
+    why_now:
+      Guardrails have a version column, but saves delete and recreate the list with default version 1. Guardrail sets
+      lack a policy version/ETag and updates are last-write-wins.
+    blocked_by:
+      - DG-G002
+    owner: backend/frontend
+    completion_evidence: Two clients saving the same version cause one success and one 409 conflict; no silent overwrite.
+    do_not_start_until: DG-G002
+  - rank: 16
+    gap_id: DG-G017
+    priority: P2
+    action: Define pilot retention, add export and account/workspace deletion workflow, and test cascades.
+    why_now:
+      Raw inputs, evidence, findings, and snapshots persist with no user-facing export/delete path, account deletion
+      workflow, or retention job.
+    blocked_by:
+      - DG-G005
+    owner: product+backend
+    completion_evidence: User export is complete; deletion removes owned rows and local account state within defined time.
+    do_not_start_until: DG-G005
+  - rank: 17
+    gap_id: DG-G018
+    priority: P2
+    action: Create pilot runbook, support channel, severity rules, response targets, and owner matrix.
+    why_now:
+      The repo has deployment and technical docs but no named pilot support channel, response time, exception owner,
+      model-quality reviewer, or incident runbook.
+    blocked_by: []
+    owner: founder/operations
+    completion_evidence:
+      Every P0/P1 failure has a named owner, contact path, response target, and recovery procedure tested
+      once.
+    do_not_start_until: immediately
+  - rank: 18
+    gap_id: DG-G019
+    priority: P2
+    action:
+      Add one bounded retry for 429/5xx, record prompt/model version, and require benchmark pass before model change;
+      defer multi-provider fallback until pilot need.
+    why_now:
+      The AI adapter makes one synchronous provider call. There is no retry for transient errors, secondary model, canary,
+      rollback, or model/prompt evaluation gate.
+    blocked_by:
+      - DG-G009
+    owner: backend/ML operations
+    completion_evidence:
+      Transient failure test retries once without duplicate audit; model version changes cannot deploy without
+      evaluation report.
+    do_not_start_until: DG-G009
+  - rank: 19
+    gap_id: DG-G013
+    priority: P2
+    action: Add recent evaluations and a single evaluation detail/replay surface after outcome capture schema is stable.
+    why_now:
+      Evaluations are queryable by the user in the database, but the UI never loads them. The user cannot revisit a verdict,
+      compare policy snapshots, or prove what changed.
+    blocked_by:
+      - DG-G003
+      - DG-G010
+    owner: frontend+backend
+    completion_evidence:
+      Signed-in user can retrieve only their evaluations, open exact snapshot, and rerun as a new evaluation
+      without mutating the original.
+    do_not_start_until: DG-G003, DG-G010
+  - rank: 20
+    gap_id: DG-G020
+    priority: P3
+    action:
+      For pilot, retain manual + structured modes and label integration values as templates; add adapters only after a
+      validated channel.
+    why_now:
+      Prompt, checklist, metric, API, and cadence values are stored, but the in-app flow is largely the same and no scheduler/adapter
+      is created from these settings.
+    blocked_by: []
+    owner: product/frontend
+    completion_evidence: Every selectable mode produces a visibly different supported flow or is explicitly marked configuration-only.
+    do_not_start_until: immediately
+  - rank: 21
+    gap_id: DG-G022
+    priority: P3
+    action: After event truth correction and outcome capture, implement a pilot report query—not a dashboard.
+    why_now:
+      Metrics YAML defines time to value, repeat use, useful intervention, and provider failure, but required client
+      events/outcome events/cost calculations are absent.
+    blocked_by:
+      - DG-G004
+      - DG-G010
+      - DG-G011
+    owner: product analytics
+    completion_evidence:
+      Pilot report computes activation, repeat use, false passes/blocks, useful intervention, latency, AI
+      cost, and support time from traceable events.
+    do_not_start_until: DG-G004, DG-G010, DG-G011
+  - rank: 22
+    gap_id: DG-G023
+    priority: P3
+    action: Qualify as target until measured; instrument first-use timing and run 5-10 observed sessions.
+    why_now:
+      The hero claims setup in under 60 seconds and strong workflow relief without observed user timing or comparison
+      with current workaround.
+    blocked_by:
+      - DG-G011
+      - pilot users
+    owner: product/research
+    completion_evidence: Claim is retained only if p50 setup and comprehension meet the threshold with defined starting conditions.
+    do_not_start_until: DG-G011, pilot users
+  - rank: 23
+    gap_id: DG-G021
+    priority: P3
+    action: Defer until pilot shows multi-workflow demand; then add list/switch/archive, not a dashboard.
+    why_now:
+      The database can hold multiple sets, but sign-in loads only the most recently updated set and the UI has no list,
+      switch, duplicate, archive, or delete surface.
+    blocked_by:
+      - pilot evidence of multi-workflow demand
+    owner: frontend/backend
+    completion_evidence: User can see and open all owned sets without losing current local edits.
+    do_not_start_until: pilot evidence of multi-workflow demand
+  - rank: 24
+    gap_id: DG-G024
+    priority: P4
+    action: Do not build before two pilot organizations request shared policy/roles.
+    why_now:
+      All data is user-owned; there is no organization, team, role, delegated administrator, shared policy, or separation
+      of operator and policy owner.
+    blocked_by:
+      - two pilot organizations request shared policy
+    owner: product/architecture
+    completion_evidence: Threshold reached and tenancy threat model approved before implementation.
+    do_not_start_until: two pilot organizations request shared policy
+  - rank: 25
+    gap_id: DG-G025
+    priority: P4
+    action: Defer until pilot thresholds; first define measured triggers and perform a database restore drill before production.
+    why_now:
+      Per-user quotas and indexes exist, but there are no load tests, queue, concurrency limits, backup restore drill,
+      SLOs, or incident rotation.
+    blocked_by:
+      - measured scale threshold
+    owner: operations/architecture
+    completion_evidence: Measured threshold reached; load and restore tests pass against explicit SLO/RPO/RTO.
+    do_not_start_until: measured scale threshold
