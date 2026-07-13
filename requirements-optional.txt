@@ -1,0 +1,18 @@
+# Optional extras. None of these are imported by the base runtime; install
+# only the ones a specific optional backend needs.
+
+# PDF/DOCX/PPTX/HTML parsing
+unstructured[pdf,docx,pptx]
+
+# Vector/semantic retrieval (not wired into any command yet -- deferred
+# until deterministic relevance has a golden-corpus benchmark)
+chromadb
+sentence-transformers
+
+# LLM-assisted compilation/synthesis backends
+anthropic
+openai
+
+# Watch/daemon-mode automation (not wired into any command this session)
+watchdog
+apscheduler

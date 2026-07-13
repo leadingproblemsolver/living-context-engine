@@ -1,0 +1,8 @@
+# No third-party dependencies are required for base functionality.
+# Every base command (init, doctor, sync, query, brief, compile, log,
+# accept, reject, status, export) runs on the Python standard library only
+# (argparse, json, sqlite3, hashlib, dataclasses, pathlib).
+#
+# Install requirements-optional.txt only to enable optional parser/LLM/
+# automation backends -- none of them are required for the core continuity
+# loop.
