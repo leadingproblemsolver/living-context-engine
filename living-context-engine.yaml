@@ -1,0 +1,33 @@
+repo:
+  name: living-context-engine
+  account: leadingproblemsolver
+  visibility: public
+  classification: advanced
+  status: active
+  canonical: true
+  canonical_ref: null
+  fork_of: null
+
+description:
+  one_liner: "Deterministic local pipeline: raw files → structured, queryable operational context, SQLite + CLI."
+  problem: "Operational memory (decisions, blockers, actions) rots into unsearchable Slack/doc sprawl."
+  proof: "SQLite pipeline implemented and CLI-callable. UNVERIFIED against real multi-week team usage."
+
+signals:
+  primary: "ContextOS / operational-amnesia thesis, applied"
+  secondary: ["deterministic (non-AI) ingestion layer", "SQLite schema design", "CLI ergonomics"]
+  audience: investor
+
+evidence:
+  level: 1
+  verified: ["pipeline runs locally", "SQLite storage confirmed"]
+  unverified: ["any real team's operational history ingested"]
+  missing: ["one external dataset run", "query-quality proof"]
+
+links:
+  live_demo: null
+  ci_badge: null
+  license: "UNLICENSED"
+
+topics: ["context-engineering", "sqlite", "cli", "operational-memory"]
+last_synced: "2026-07-17"
