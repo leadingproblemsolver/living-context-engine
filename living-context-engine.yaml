@@ -1,0 +1,23 @@
+repo:
+  name: living-context-engine
+  version: 1.0.0
+  status: release_candidate
+  classification: local_first_context_compiler
+product:
+  user: technical operators, maintainers, founders, and project teams
+  function: project files to source-linked operational context and context packs
+  primary_input: Markdown, text, JSON, or YAML corpus plus project identifier
+  primary_output: SQLite records, query/timeline results, context packs, JSON/CSV export, read-only API
+integration:
+  surfaces: [python_cli, python_wheel, sqlite, markdown, json, csv, read_only_http]
+  credentials_required_for_local_cli: false
+  token_required_for_non_loopback_api: true
+verified_offline:
+  - deterministic classification and source lineage
+  - project-isolated source replacement and deletion
+  - path privacy and symlink rejection
+  - query, timeline, pack, export, and API contracts
+unverified_external:
+  - recall quality against a labeled real corpus
+  - multi-user access-policy integration
+  - production throughput and long-term usefulness

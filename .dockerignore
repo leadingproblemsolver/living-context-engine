@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.whl
+*.zip
+data/*.sqlite
+data/*.sqlite-*
+artifacts
+reports/*.json
+reports/*.md

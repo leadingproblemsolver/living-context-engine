@@ -1,0 +1,11 @@
+services:
+  living-context:
+    build: .
+    ports: ["8790:8790"]
+    environment:
+      LCE_API_TOKEN: ${LCE_API_TOKEN:?set LCE_API_TOKEN}
+      LCE_CORS_ORIGIN: ${LCE_CORS_ORIGIN:-}
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+    restart: unless-stopped

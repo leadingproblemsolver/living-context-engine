@@ -1,0 +1,21 @@
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["."]
+
+[project]
+name = "living-context-engine"
+version = "1.0.0"
+description = "Local-first operational context ingestion, search, timeline, and context-pack compiler"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Leading Problem Solver"}]
+dependencies = []
+
+[project.scripts]
+lce = "living_context.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
