@@ -1,23 +1,65 @@
 repo:
   name: living-context-engine
-  version: 1.0.0
+  version: 2.0.0
   status: release_candidate
-  classification: local_first_context_compiler
+  classification: reality_delta_compiler
 product:
-  user: technical operators, maintainers, founders, and project teams
-  function: project files to source-linked operational context and context packs
-  primary_input: Markdown, text, JSON, or YAML corpus plus project identifier
-  primary_output: SQLite records, query/timeline results, context packs, JSON/CSV export, read-only API
+  user: founders, product and research teams, and operators making decisions under uncertainty
+  function: >-
+    turn observations into traceable state, detect what changed and why, keep
+    contradictions first-class, and rank the next verification actions
+  primary_input: >-
+    observation packets, or Markdown/text/JSON/YAML sources containing claim,
+    unknown, decision, risk, blocker, and relation statements
+  primary_output: >-
+    current reality model, state transitions with rationale, open contradictions,
+    open unknowns, ranked validation actions, task-scoped context packs, and an
+    uncertainty metric over time
+primitives:
+  - ingestion
+  - extraction
+  - state_graph
+  - delta_engine
+  - action_router
+invariants_enforced:
+  - state_not_content
+  - provenance_on_every_claim
+  - graph_updates_from_reality
+  - contradictions_are_first_class
+  - task_specific_retrieval
+  - uncertainty_produces_action
+  - memory_compounds
+north_star_metric: uncertainty removed per unit time
 integration:
-  surfaces: [python_cli, python_wheel, sqlite, markdown, json, csv, read_only_http]
-  credentials_required_for_local_cli: false
+  surfaces:
+    - python_cli
+    - python_wheel
+    - python_api
+    - repository_config
+    - github_actions
+    - sqlite
+    - markdown
+    - json
+    - jsonl
+    - csv
+    - read_only_http
+  credentials_required_for_local_use: false
+  optional_model_extraction: anthropic sdk via the `llm` extra
   token_required_for_non_loopback_api: true
 verified_offline:
-  - deterministic classification and source lineage
-  - project-isolated source replacement and deletion
-  - path privacy and symlink rejection
-  - query, timeline, pack, export, and API contracts
+  - deterministic line extraction and packet validation
+  - evidence idempotence across repeated ingestion
+  - confidence derived from evidence weight, source independence, and age
+  - method ceilings bounding what a source kind can establish
+  - transition classification with recorded rationale
+  - contradiction detection, supersession margin, and resolution
+  - task-scoped context assembly
+  - action ranking and expected-gain projection
+  - uncertainty metric and snapshots
+  - project isolation, deletion, and graph self-validation
+  - read-only HTTP state, delta, contradiction, unknown, action, metric, and context endpoints
 unverified_external:
-  - recall quality against a labeled real corpus
-  - multi-user access-policy integration
-  - production throughput and long-term usefulness
+  - extraction quality against a labelled real corpus
+  - model-assisted extraction accuracy at scale
+  - whether the ranked actions measurably shorten real decisions
+  - multi-user access-policy integration and production throughput

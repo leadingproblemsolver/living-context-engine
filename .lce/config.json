@@ -1,0 +1,11 @@
+{
+  "project": "living-context-engine",
+  "sources": [
+    "docs",
+    ".lce/observations"
+  ],
+  "half_life_days": 180,
+  "model": "claude-opus-5",
+  "effort": "high",
+  "database": "data/living-context.sqlite"
+}

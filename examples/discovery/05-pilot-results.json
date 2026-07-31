@@ -1,0 +1,91 @@
+{
+  "source": {
+    "ref": "pilots/2026-07-paid-pilot",
+    "kind": "transaction",
+    "actor": "billing-system",
+    "observed_at": "2026-07-15T00:00:00+00:00"
+  },
+  "entities": [
+    {
+      "name": "Manufacturing Ops Managers",
+      "kind": "segment",
+      "aliases": ["mfg ops", "plant ops managers"]
+    },
+    { "name": "Compliance Exporter", "kind": "solution", "aliases": [] }
+  ],
+  "claims": [
+    {
+      "entity": "Manufacturing Ops Managers",
+      "attribute": "willingness_to_pay",
+      "value": "$1,500 per month, paid, no procurement involvement",
+      "importance": 0.95,
+      "evidence": [
+        {
+          "excerpt": "Invoice PIL-0011 paid in full within 4 days, card, no PO raised.",
+          "kind": "transaction",
+          "actor": "acme-fabrication",
+          "locator": "invoice PIL-0011"
+        },
+        {
+          "excerpt": "Invoice PIL-0012 paid in full within 9 days, card, no PO raised.",
+          "kind": "transaction",
+          "actor": "brightforge-metals",
+          "locator": "invoice PIL-0012"
+        },
+        {
+          "excerpt": "Invoice PIL-0014 paid in full within 2 days, ACH, no PO raised.",
+          "kind": "transaction",
+          "actor": "cordell-plastics",
+          "locator": "invoice PIL-0014"
+        }
+      ]
+    },
+    {
+      "entity": "Manufacturing Ops Managers",
+      "attribute": "buyer",
+      "value": "Department Head",
+      "importance": 0.9,
+      "evidence": [
+        {
+          "excerpt": "All three pilot contracts signed by the plant's Department Head; no VP signature on any of them.",
+          "kind": "transaction",
+          "actor": "contract-records",
+          "locator": "contracts 11,12,14"
+        }
+      ]
+    },
+    {
+      "entity": "Compliance Exporter",
+      "attribute": "activation_time",
+      "value": "under one working day in all three pilots",
+      "importance": 0.7,
+      "evidence": [
+        {
+          "excerpt": "Median time from signature to first exported report: 6h20m across three pilots.",
+          "kind": "measurement",
+          "actor": "product-telemetry",
+          "locator": "activation dashboard 2026-07-15"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "Manufacturing Ops Managers",
+      "to": "Compliance Exporter",
+      "relation": "buys"
+    }
+  ],
+  "unknowns": [
+    {
+      "question": "Do pilots at $1,500 renew after the first audit cycle?",
+      "impact": 0.9,
+      "blocks_decision": "raising the price"
+    },
+    {
+      "question": "Does the under-$10k procurement threshold hold above three sites?",
+      "impact": 0.7,
+      "blocks_decision": "multi-site expansion motion"
+    }
+  ]
+}

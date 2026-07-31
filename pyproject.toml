@@ -5,13 +5,16 @@ backend-path = ["."]
 
 [project]
 name = "living-context-engine"
-version = "1.0.0"
-description = "Local-first operational context ingestion, search, timeline, and context-pack compiler"
+version = "2.0.0"
+description = "Local-first reality delta compiler: turns observations into traceable state, contradictions, and next validation actions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Leading Problem Solver"}]
 dependencies = []
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.69"]
 
 [project.scripts]
 lce = "living_context.cli:main"

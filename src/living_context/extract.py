@@ -99,16 +99,18 @@ def read_source(path: Path) -> tuple[str, bytes]:
     return data.decode("utf-8", errors="replace"), data
 
 
-def extract_path(path: Path, project: str, root: Path) -> list[ContextRecord]:
-    del root  # retained for backwards-compatible function signature
+def iter_sources(path: Path) -> list[tuple[Path, str]]:
+    """Resolve a file or directory into (file, source reference) pairs.
+
+    The reference is the path recorded against every record and every piece of
+    evidence, so it must stay stable and must never leak an absolute path.
+    """
     path = Path(path)
     if path.is_symlink():
         raise ValueError("symlink sources are not accepted")
     path = path.resolve()
     if not path.exists():
         raise ValueError(f"source path does not exist: {path}")
-    if not project.strip() or len(project) > 200:
-        raise ValueError("project is required and must be <= 200 characters")
     if path.is_file():
         if path.suffix.lower() not in SUPPORTED:
             raise ValueError(f"unsupported source type: {path.suffix or 'none'}")
@@ -126,13 +128,24 @@ def extract_path(path: Path, project: str, root: Path) -> list[ContextRecord]:
         source_root = path
     if len(paths) > MAX_FILES:
         raise ValueError("source set exceeds 1000 files")
+    return [(item, item.relative_to(source_root).as_posix()) for item in paths]
+
+
+def observed_at(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+
+
+def extract_path(path: Path, project: str, root: Path) -> list[ContextRecord]:
+    del root  # retained for backwards-compatible function signature
+    if not project.strip() or len(project) > 200:
+        raise ValueError("project is required and must be <= 200 characters")
     records = []
-    for item in paths:
+    for item, relative in iter_sources(path):
         text, data = read_source(item)
         source_hash = sha256(data)
-        stamp = datetime.fromtimestamp(item.stat().st_mtime, timezone.utc).isoformat()
-        relative = item.relative_to(source_root).as_posix()
         records.extend(
-            records_from_text(text, relative, project.strip(), source_hash, stamp)
+            records_from_text(
+                text, relative, project.strip(), source_hash, observed_at(item)
+            )
         )
     return records

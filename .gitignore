@@ -8,3 +8,7 @@ dist/
 .env
 data/*.sqlite
 artifacts/
+
+# Living Context Engine
+data/living-context.sqlite
+data/living-context.sqlite-*

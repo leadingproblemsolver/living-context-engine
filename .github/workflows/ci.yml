@@ -9,5 +9,31 @@ jobs:
         with: { python-version: '3.13' }
       - run: python -m pip install pytest
       - run: python -m pytest -q
-      - run: python -m pip wheel . --no-deps --wheel-dir dist
-      - run: PYTHONPATH=src python -m living_context.cli --root . validate
+
+      - name: Build and install the wheel
+        run: |
+          python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+          python -m pip install --no-index --no-deps dist/living_context_engine-*.whl
+
+      - name: Run the loop end to end
+        working-directory: ${{ runner.temp }}
+        run: |
+          lce --project ci init
+          lce ingest "$GITHUB_WORKSPACE/examples/discovery" --json
+          lce state
+          lce delta
+          lce contradictions
+          lce actions --refresh --top 5
+          lce context "should we build the compliance exporter first" \
+            --output artifacts/context.md
+          lce metric
+          lce prompt interview-guide > artifacts/interview-guide.txt
+          lce doctor
+
+      - name: Check the graph against its own provenance
+        run: PYTHONPATH=src python -m living_context.cli --root . validate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loop-output
+          path: ${{ runner.temp }}/artifacts/
