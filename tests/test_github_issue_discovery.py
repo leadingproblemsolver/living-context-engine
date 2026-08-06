@@ -1,3 +1,4 @@
+import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -6,6 +7,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "discover_github_issues.py"
 SPEC = spec_from_file_location("discover_github_issues", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
