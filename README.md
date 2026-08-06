@@ -66,4 +66,14 @@ Project deletion is an explicit destructive operator action. The HTTP service is
 
 Classification is deterministic and intentionally conservative. A context pack is a source-linked retrieval artifact, not a completeness guarantee, autonomous memory, or decision-maker.
 
+## GitHub inspection pipeline
+
+The repository includes a human-reviewed discovery pipeline for finding live GitHub issues that match LCE's implemented capabilities:
+
+```bash
+python scripts/discover_github_issues.py
+```
+
+It produces ranked JSON and Markdown review queues. It never posts public comments automatically. See [`docs/GITHUB_REVIEW_PIPELINE.md`](docs/GITHUB_REVIEW_PIPELINE.md) for the qualification model, response gate, inspection-readiness checks, and weekly operating target.
+
 See [`docs/INTEGRATION.md`](docs/INTEGRATION.md), [`docs/API.md`](docs/API.md), and [`DEPLOYABILITY_DISTRIBUTION.md`](DEPLOYABILITY_DISTRIBUTION.md).

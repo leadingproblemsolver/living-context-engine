@@ -1,0 +1,48 @@
+name: Build GitHub review queue
+
+on:
+  workflow_dispatch:
+    inputs:
+      created_after:
+        description: Earliest issue creation date (YYYY-MM-DD)
+        required: false
+        default: "2026-05-01"
+      min_score:
+        description: Minimum qualification score
+        required: false
+        default: "55"
+  schedule:
+    - cron: "17 5 * * 1,4"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Discover and score relevant issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CREATED_AFTER: ${{ inputs.created_after || '2026-05-01' }}
+          MIN_SCORE: ${{ inputs.min_score || '55' }}
+        run: |
+          python scripts/discover_github_issues.py \
+            --created-after "$CREATED_AFTER" \
+            --min-score "$MIN_SCORE"
+
+      - name: Upload review queue
+        uses: actions/upload-artifact@v4
+        with:
+          name: lce-github-review-queue
+          path: |
+            artifacts/github-review-queue.json
+            artifacts/github-review-queue.md
+          if-no-files-found: error
+          retention-days: 14
