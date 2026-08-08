@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Discover and score GitHub issues that match Living Context Engine capabilities.
+"""Discover and score GitHub issues for human-reviewed constraint intelligence.
 
 Uses only the Python standard library. Public searches work without a token at a
 lower rate limit; set GITHUB_TOKEN for authenticated requests.
 
-This script never posts comments. It produces a review queue for a human operator.
+This script never posts comments. It preserves the issue evidence needed by the
+constraint-intelligence compiler and produces a review queue for a human operator.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 API_URL = "https://api.github.com/search/issues"
-USER_AGENT = "living-context-engine-review-pipeline/1.0"
+USER_AGENT = "living-context-engine-review-pipeline/2.0"
 
 
 @dataclass(frozen=True)
@@ -31,11 +32,13 @@ class Candidate:
     repository: str
     number: int
     title: str
+    body: str
     url: str
     created_at: str
     updated_at: str
     comments: int
     author: str
+    labels: list[str]
     query_id: str
     matched_terms: list[str]
     relevance: int
@@ -46,6 +49,9 @@ class Candidate:
     score: int
     reason: str
     draft_angle: str
+    source_platform: str = "github"
+    unresolved: bool = True
+    contribution_gap: bool = True
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -100,8 +106,9 @@ def score_item(item: dict[str, Any], query: dict[str, Any]) -> Candidate:
     relevance = min(40, 12 + 7 * len(matched))
     intent_markers = (
         "how do i", "how can i", "need a way", "looking for", "workaround",
-        "blocked", "losing context", "resume", "handoff", "provenance",
-        "source line", "audit trail", "stale context", "decision log",
+        "blocked", "production", "manual restart", "rollback", "downgrade",
+        "duplicate", "silent", "stuck", "resume", "retry", "data loss",
+        "customer", "enterprise", "hours", "days", "wrong user", "unauthorized",
     )
     intent = min(25, 7 + 4 * sum(marker in text for marker in intent_markers))
     recency = age_score(str(item.get("created_at")))
@@ -109,27 +116,30 @@ def score_item(item: dict[str, Any], query: dict[str, Any]) -> Candidate:
     validation = 10 if comments >= 3 else 7 if comments >= 1 else 2
 
     login = str((item.get("user") or {}).get("login", ""))
-    labels = " ".join(str(label.get("name", "")) for label in item.get("labels", []))
+    label_names = [str(label.get("name", "")) for label in item.get("labels", [])]
+    labels_text = " ".join(label_names)
     spam_markers = ("dependabot", "renovate", "stale", "duplicate", "invalid", "good first issue")
-    spam_penalty = 20 if any(marker in f"{login} {labels}".lower() for marker in spam_markers) else 0
+    spam_penalty = 20 if any(marker in f"{login} {labels_text}".lower() for marker in spam_markers) else 0
 
     score = max(0, min(100, relevance + intent + recency + validation - spam_penalty))
     repository_url = str(item.get("repository_url", ""))
     repository = repository_url.removeprefix("https://api.github.com/repos/")
-    angle = str(query.get("help_angle", "Explain the mechanism, offer a concrete workaround, then mention LCE only when directly relevant."))
+    angle = str(query.get("help_angle", "Preserve as market evidence by default; interact only when there is a concrete unresolved contribution gap."))
     reason = (
-        f"Matched {len(matched)} capability terms; {comments} comments; "
+        f"Matched {len(matched)} signal terms; {comments} comments; "
         f"intent={intent}, recency={recency}, penalty={spam_penalty}."
     )
     return Candidate(
         repository=repository,
         number=int(item["number"]),
         title=title,
+        body=body,
         url=str(item["html_url"]),
         created_at=str(item["created_at"]),
         updated_at=str(item["updated_at"]),
         comments=comments,
         author=login,
+        labels=label_names,
         query_id=str(query["id"]),
         matched_terms=matched,
         relevance=relevance,
@@ -146,33 +156,35 @@ def score_item(item: dict[str, Any], query: dict[str, Any]) -> Candidate:
 def build_query(query: dict[str, Any], created_after: str) -> str:
     phrases = " OR ".join(f'"{term}"' for term in query.get("terms", []))
     exclusions = " ".join(f'-label:"{label}"' for label in query.get("exclude_labels", []))
+    repositories = " ".join(f"repo:{repo}" for repo in query.get("repositories", []))
     return (
         f"is:issue is:open created:>{created_after} ({phrases}) "
-        f"{exclusions} archived:false"
+        f"{repositories} {exclusions} archived:false"
     ).strip()
 
 
 def render_markdown(candidates: list[Candidate]) -> str:
     lines = [
-        "# LCE GitHub review queue",
+        "# GitHub signal review queue",
         "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
         "",
-        "> Human review required. Do not automate public comments.",
+        "> Human review required. Default public action is no comment. Preserve strong evidence even when intervention value is low.",
         "",
     ]
     for index, candidate in enumerate(candidates, start=1):
         lines.extend([
-            f"## {index}. [{candidate.repository} #{candidate.number}]({candidate.url}) — {candidate.score}/100",
+            f"## {index}. [{candidate.repository} #{candidate.number}]({candidate.url}) — discovery {candidate.score}/100",
             "",
             f"**{candidate.title}**",
             "",
             f"- Query: `{candidate.query_id}`",
             f"- Author: `{candidate.author}`; comments: {candidate.comments}",
+            f"- Labels: {', '.join(candidate.labels) or 'none'}",
             f"- Matched terms: {', '.join(candidate.matched_terms) or 'none'}",
             f"- Qualification: {candidate.reason}",
-            f"- Help angle: {candidate.draft_angle}",
-            "- Review gate: verify the issue is unresolved, reproduce or inspect linked code, provide value before mentioning LCE.",
+            f"- Review angle: {candidate.draft_angle}",
+            "- Next gate: compile constraint value independently from intervention value; inspect the full thread before any public action.",
             "",
         ])
     return "\n".join(lines)
@@ -180,10 +192,10 @@ def render_markdown(candidates: list[Candidate]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=Path("config/github_issue_queries.json"))
+    parser.add_argument("--config", type=Path, default=Path("config/constraint_signal_queries.json"))
     parser.add_argument("--created-after", default="2026-05-01")
-    parser.add_argument("--per-query", type=int, default=20)
-    parser.add_argument("--min-score", type=int, default=55)
+    parser.add_argument("--per-query", type=int, default=30)
+    parser.add_argument("--min-score", type=int, default=45)
     parser.add_argument("--output", type=Path, default=Path("artifacts/github-review-queue.json"))
     parser.add_argument("--markdown", type=Path, default=Path("artifacts/github-review-queue.md"))
     args = parser.parse_args()
@@ -209,7 +221,7 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps([asdict(item) for item in ranked], indent=2) + "\n", encoding="utf-8")
     args.markdown.write_text(render_markdown(ranked), encoding="utf-8")
-    print(f"Wrote {len(ranked)} qualified candidates to {args.output} and {args.markdown}")
+    print(f"Wrote {len(ranked)} qualified signals to {args.output} and {args.markdown}")
     return 0
 
 
