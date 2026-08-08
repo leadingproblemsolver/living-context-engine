@@ -66,14 +66,35 @@ Project deletion is an explicit destructive operator action. The HTTP service is
 
 Classification is deterministic and intentionally conservative. A context pack is a source-linked retrieval artifact, not a completeness guarantee, autonomous memory, or decision-maker.
 
-## GitHub inspection pipeline
+## Constraint intelligence pipeline
 
-The repository includes a human-reviewed discovery pipeline for finding live GitHub issues that match LCE's implemented capabilities:
+The repository includes a human-reviewed engineering-pain discovery and constraint-intelligence pipeline. GitHub is treated as a sensor network: strong market evidence is preserved even when a thread is a poor public-comment target.
 
 ```bash
-python scripts/discover_github_issues.py
+python scripts/discover_github_issues.py \
+  --config config/constraint_signal_queries.json
+
+python scripts/build_constraint_intelligence.py \
+  --input artifacts/github-review-queue.json \
+  --taxonomy config/constraint_taxonomy.json
 ```
 
-It produces ranked JSON and Markdown review queues. It never posts public comments automatically. See [`docs/GITHUB_REVIEW_PIPELINE.md`](docs/GITHUB_REVIEW_PIPELINE.md) for the qualification model, response gate, inspection-readiness checks, and weekly operating target.
+The compiler keeps two decisions separate:
+
+- **constraint value** — production evidence, economic consequence, workaround burden, recurrence, cross-system generality, buyer proximity, serviceability, proof feasibility, and urgency;
+- **intervention value** — whether this occurrence deserves corpus-only retention, watching, a diagnostic question, a precision comment, a reproduction, a patch/diagnostic, or operator assistance.
+
+Default public action is **no comment**. The system is designed to move repeated evidence from discovery toward diagnostics, reproductions, patches, audits, operator validation, and reusable product primitives rather than optimize comment count.
+
+Generated artifacts:
+
+- `artifacts/github-review-queue.json` / `.md` — evidence-preserving discovery queue;
+- `artifacts/constraint-intelligence.json` — signal-level scores and recommended interventions;
+- `artifacts/constraint-leaderboard.json` — ranked constraint families;
+- `artifacts/constraint-intelligence.md` — human operating report.
+
+See [`docs/CONSTRAINT_INTELLIGENCE_OPERATING_SYSTEM.md`](docs/CONSTRAINT_INTELLIGENCE_OPERATING_SYSTEM.md) for the exploration/exploitation gates, proof ladder, public contribution policy, daily/weekly loops, success metrics, and provisional audit offers.
+
+The original inspection details remain in [`docs/GITHUB_REVIEW_PIPELINE.md`](docs/GITHUB_REVIEW_PIPELINE.md).
 
 See [`docs/INTEGRATION.md`](docs/INTEGRATION.md), [`docs/API.md`](docs/API.md), and [`DEPLOYABILITY_DISTRIBUTION.md`](DEPLOYABILITY_DISTRIBUTION.md).
