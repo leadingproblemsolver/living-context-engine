@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "saturation_states": [
+    "emerging",
+    "confirmed",
+    "saturated",
+    "validating",
+    "serviceable",
+    "proven",
+    "productizable",
+    "commoditized",
+    "deprioritized"
+  ],
+  "constraints": [
+    {
+      "id": "operational-truth-divergence",
+      "name": "Operational truth divergence",
+      "description": "Configured, persisted, or control-plane state says a capability is healthy/active while the serving runtime is not actually performing it.",
+      "keywords": ["published", "active", "healthy", "ready", "liveness", "readiness", "not registered", "dead trigger", "stuck running", "silent failure", "manual restart", "reconnect"],
+      "economic_effects": ["missed events", "downtime", "manual monitoring", "incident response", "false operator confidence"],
+      "buyer_personas": ["automation engineer", "platform engineer", "devops", "technical founder"],
+      "interventions": ["runtime receipt", "active probe", "reconciliation", "degraded state", "watchdog"]
+    },
+    {
+      "id": "side-effect-integrity",
+      "name": "Ambiguous or duplicate side effects",
+      "description": "Retries, timeouts, replay, or fan-out make externally visible actions duplicate or leave their outcome ambiguous.",
+      "keywords": ["duplicate", "sent twice", "multiple sends", "retry", "timeout", "idempotency", "false 500", "already committed", "replay", "double", "partial delivery"],
+      "economic_effects": ["duplicate customer communication", "duplicate charges", "duplicate records", "manual reconciliation"],
+      "buyer_personas": ["automation engineer", "operations engineer", "platform engineer", "technical founder"],
+      "interventions": ["idempotency envelope", "operation receipt", "attempt ledger", "external receipt reconciliation"]
+    },
+    {
+      "id": "identity-credential-continuity",
+      "name": "Identity and credential continuity",
+      "description": "A user, tenant, credential, secret, scope, or request principal is lost or changed across execution surfaces.",
+      "keywords": ["credential", "authorization", "unauthorized", "anonymous caller", "user_id", "tenant", "request context", "secret", "oauth", "token", "principal", "401"],
+      "economic_effects": ["failed business action", "wrong-tenant action", "manual reauthentication", "security exposure"],
+      "buyer_personas": ["platform engineer", "security engineer", "automation engineer"],
+      "interventions": ["principal envelope", "credential-path trace", "scope verification", "context continuity test"]
+    },
+    {
+      "id": "durable-execution-correctness",
+      "name": "Persistence and resume correctness",
+      "description": "Runtime, persisted, restored, or resumed execution state disagree about the same logical run.",
+      "keywords": ["resume", "restart", "paused", "suspended", "checkpoint", "rehydrate", "persisted", "stale run", "continue", "fork", "snapshot"],
+      "economic_effects": ["stranded work", "duplicate work", "wrong continuation", "manual recovery"],
+      "buyer_personas": ["platform engineer", "ai engineer", "automation engineer"],
+      "interventions": ["resume generation", "compare-and-swap", "storage-authoritative recovery", "run lineage"]
+    },
+    {
+      "id": "delivery-assurance",
+      "name": "Silent delivery failure",
+      "description": "The internal operation completes or appears successful while the intended downstream delivery is partial, lost, or unclaimed.",
+      "keywords": ["not delivered", "never delivered", "partial delivery", "rejected", "queued", "never sent", "missing message", "webhook", "email", "discord", "sms"],
+      "economic_effects": ["lost customer communication", "missed SLA", "unprocessed events", "manual resend"],
+      "buyer_personas": ["operations engineer", "automation engineer", "support engineering"],
+      "interventions": ["delivery receipt", "outbox", "partial outcome semantics", "queue reconciliation"]
+    },
+    {
+      "id": "state-amplification",
+      "name": "State amplification and resource pressure",
+      "description": "Persisted, serialized, replayed, or retained state grows disproportionately and causes memory, storage, transport, or runtime failure.",
+      "keywords": ["oom", "out of memory", "memory", "gigabyte", "snapshot", "4mb", "grpc", "history", "redis", "state size", "swap", "leak"],
+      "economic_effects": ["crashes", "latency", "infrastructure cost", "manual restart"],
+      "buyer_personas": ["platform engineer", "sre", "devops"],
+      "interventions": ["bounded retention", "claim check", "by-reference state", "pressure budget"]
+    },
+    {
+      "id": "configuration-authority-drift",
+      "name": "Configuration authority drift",
+      "description": "Saved, displayed, cached, or reconstructed configuration differs from the configuration actually used by the runtime.",
+      "keywords": ["configuration", "config", "environment", "env var", "serialized", "deserialize", "external secrets", "model config", "ignored setting", "lost setting"],
+      "economic_effects": ["production mismatch", "failed deployment", "manual rollback", "unexpected behavior"],
+      "buyer_personas": ["platform engineer", "devops", "automation engineer"],
+      "interventions": ["effective-config fingerprint", "round-trip fidelity test", "configuration provenance"]
+    },
+    {
+      "id": "evidence-freshness",
+      "name": "Evidence freshness and stale projections",
+      "description": "A status, verification, health result, or derived projection remains authoritative after the underlying evidence has changed.",
+      "keywords": ["stale", "freshness", "verification", "old state", "cached", "outdated", "projection", "observed_at", "last success", "last failure"],
+      "economic_effects": ["false confidence", "wrong automation decision", "repeated work", "missed failure"],
+      "buyer_personas": ["platform engineer", "sre", "automation engineer"],
+      "interventions": ["evidence receipt", "freshness TTL", "source revision", "reconciliation"]
+    },
+    {
+      "id": "tenant-state-isolation",
+      "name": "Tenant and request state isolation",
+      "description": "State, memory, mutable objects, or routing identity crosses tenant, user, request, or session boundaries.",
+      "keywords": ["cross-user", "cross user", "wrong user", "tenant", "shared state", "same key", "collision", "leak", "request isolation", "session id"],
+      "economic_effects": ["data leakage", "wrong-user action", "security incident", "corrupted personalization"],
+      "buyer_personas": ["security engineer", "platform engineer", "ai engineer"],
+      "interventions": ["canonical scoped identity", "ownership validation", "request-generation isolation"]
+    },
+    {
+      "id": "provider-adapter-fidelity",
+      "name": "Provider and adapter fidelity",
+      "description": "Provider-specific event, ordering, correlation, or serialization semantics are lost at an adapter boundary.",
+      "keywords": ["provider", "adapter", "schema", "event shape", "index", "ordering", "correlation", "compatibility", "api changed", "unknown event"],
+      "economic_effects": ["silent wrong output", "integration outage", "manual compatibility work", "incorrect mapping"],
+      "buyer_personas": ["integration engineer", "platform engineer", "ai engineer"],
+      "interventions": ["normalization boundary", "correlation identity", "versioned fixtures", "conformance test"]
+    }
+  ]
+}
