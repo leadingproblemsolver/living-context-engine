@@ -1,4 +1,4 @@
-name: Build GitHub review queue
+name: Build constraint intelligence queue
 
 on:
   workflow_dispatch:
@@ -8,9 +8,9 @@ on:
         required: false
         default: "2026-05-01"
       min_score:
-        description: Minimum qualification score
+        description: Minimum discovery qualification score
         required: false
-        default: "55"
+        default: "45"
   schedule:
     - cron: "17 5 * * 1,4"
 
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  discover:
+  discover-and-compile:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +27,38 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Discover and score relevant issues
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Run pipeline tests
+        run: python -m pytest tests/test_github_issue_discovery.py tests/test_constraint_intelligence.py -q
+
+      - name: Discover high-signal engineering pain
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CREATED_AFTER: ${{ inputs.created_after || '2026-05-01' }}
-          MIN_SCORE: ${{ inputs.min_score || '55' }}
+          MIN_SCORE: ${{ inputs.min_score || '45' }}
         run: |
           python scripts/discover_github_issues.py \
+            --config config/constraint_signal_queries.json \
             --created-after "$CREATED_AFTER" \
             --min-score "$MIN_SCORE"
 
-      - name: Upload review queue
+      - name: Compile constraint intelligence
+        run: |
+          python scripts/build_constraint_intelligence.py \
+            --input artifacts/github-review-queue.json \
+            --taxonomy config/constraint_taxonomy.json
+
+      - name: Upload intelligence artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: lce-github-review-queue
+          name: constraint-intelligence
           path: |
             artifacts/github-review-queue.json
             artifacts/github-review-queue.md
+            artifacts/constraint-intelligence.json
+            artifacts/constraint-leaderboard.json
+            artifacts/constraint-intelligence.md
           if-no-files-found: error
           retention-days: 14
