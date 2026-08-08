@@ -44,9 +44,10 @@ jobs:
             --created-after "$CREATED_AFTER" \
             --min-score "$MIN_SCORE"
 
-      - name: Compile constraint intelligence
+      - name: Compile accumulated and fresh constraint intelligence
         run: |
-          python scripts/build_constraint_intelligence.py \
+          python scripts/compile_constraint_corpus.py \
+            --input data/constraint_seed_signals.json \
             --input artifacts/github-review-queue.json \
             --taxonomy config/constraint_taxonomy.json
 
