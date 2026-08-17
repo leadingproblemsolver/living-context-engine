@@ -5,8 +5,13 @@
 ```bash
 pip install living-context-engine
 cd your-repo
-lce init --ci          # --ci also writes .github/workflows/lce.yml
+lce init --profile customer-discovery --ci --connectors
+lce doctor
 ```
+
+`--profile` seeds the vocabulary and starter questions for a kind of work
+(`lce profiles` lists them), `--ci` writes a GitHub Actions workflow, and
+`--connectors` writes `.lce/connectors.json` plus a drop folder.
 
 `lce init` writes:
 
@@ -33,6 +38,11 @@ Nothing is overwritten unless you pass `--force`, so it is safe to re-run.
 }
 ```
 
+- `profile` sets the vocabulary injected into extraction prompts — see
+  [`ADOPTION.md`](ADOPTION.md) §13.
+- `auto_apply` lists the origins applied without review (default
+  `["parser","human"]`). Add `"connector"` once `lce review` shows it earning its
+  keep.
 - `sources` are globs relative to the repository root. Point them at wherever
   observations actually live — `docs/`, `research/`, `notes/`, an exported
   `support/` dump.
@@ -54,6 +64,15 @@ lce delta --since 2026-07-01
 lce contradictions
 lce actions --refresh --top 10
 lce context "should we raise the price" --output artifacts/pricing.md
+```
+
+Bringing in the systems where evidence already lives:
+
+```bash
+lce pull                     # every configured connector, staged for review
+lce review                   # accept, reject, or spot-check
+lce identity --fix           # stage merges before the graph forks
+lce digest --format slack --post-slack
 ```
 
 Recording outcomes as work completes is what makes the metric mean anything:

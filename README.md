@@ -22,14 +22,16 @@ required.
 pip install living-context-engine
 
 cd your-repo
-lce init                       # writes .lce/config.json and a syntax guide
-lce ingest examples/discovery  # read sources, diff against state, record changes
-lce state                      # what you believe now
-lce delta                      # what changed, and why it changed
-lce contradictions             # where the evidence disagrees with itself
-lce actions --refresh          # ranked next validation actions
-lce context "should we build the exporter first"   # a decision-scoped pack
-lce metric                     # uncertainty, and how fast it is falling
+lce init --profile customer-discovery   # config, vocabulary, starter questions
+lce ingest examples/discovery           # read sources, diff, record what changed
+lce state                               # what you believe now
+lce delta                               # what changed, and why it changed
+lce contradictions                      # where the evidence disagrees with itself
+lce why <claim_id>                       # why do you say that, and what would move it
+lce decision add "Should we build the exporter first?" --auto-link
+lce decisions                            # can this be decided yet, and what is blocking it
+lce actions --refresh                    # ranked next validation actions
+lce digest                               # the weekly what-changed summary
 ```
 
 Run that against the bundled `examples/discovery` corpus — fourteen customer
@@ -86,8 +88,21 @@ behaviour route to experiments, because interviews cannot settle them.
 
 **The metric is uncertainty removed per unit time.** Not documents ingested, not
 tokens. `lce metric` reports the current uncertainty load and its rate of
-change. Ingesting usually *raises* it at first — that is the engine finding out
-what you did not know.
+change, and `lce metric --decision <id>` scopes it to one decision. Ingesting
+usually *raises* it at first — that is the engine finding out what you did not
+know.
+
+**Nothing inferred enters the graph unreviewed.** Deterministic parsing of a file
+a human wrote is applied directly. Model extraction, connector pulls, and API
+writes are staged as proposals — one per claim — and `lce review` reports the
+acceptance rate per source so you can see which ones are worth their review cost.
+
+**Claims exist to serve decisions.** Register the decision, link the evidence, and
+the engine tells you whether it can be decided yet — governed by the *weakest*
+load-bearing belief, because that is the one most likely to be wrong.
+
+Six more adoption invariants, and why each one exists, are in
+[`docs/ADOPTION.md`](docs/ADOPTION.md).
 
 ## Getting observations in
 
@@ -138,17 +153,43 @@ packet schema.
 
 See [`docs/PROMPTS.md`](docs/PROMPTS.md).
 
-## Integration surfaces
+## Plugging into what you already use
 
-- `lce` CLI for local work and CI (`lce init --ci` writes a workflow)
-- `.lce/config.json` for per-repository sources, project id, and decay
-- one SQLite database you can query directly
-- JSON/CSV export of either layer (`--layer state` or `--layer records`)
-- Markdown + JSON context packs
-- read-only HTTP API: state, delta, contradictions, unknowns, actions, metric,
-  context
+**Inside your assistant.** `lce mcp` runs the engine as an MCP server, so Claude
+Desktop, Claude Code, or Cursor can read the graph, cite its confidence, and
+propose observations from whatever it just read:
 
-See [`docs/INTEGRATION.md`](docs/INTEGRATION.md) and [`docs/API.md`](docs/API.md).
+```bash
+lce mcp --print-config          # paste into your MCP client
+```
+
+Proposals land in `lce review` — the assistant gets to be useful and wrong
+without touching the graph. See [`docs/MCP.md`](docs/MCP.md).
+
+**From the systems evidence already lives in.** One connector contract, four built
+in — spreadsheet exports (with population roll-up), GitHub issues, a Slack export,
+and a drop folder anything can write into:
+
+```bash
+lce connectors     # available, configured, last run
+lce pull           # fetch, stage for review, advance cursors
+```
+
+Plus a single write endpoint (`POST /api/observations`, separate write token,
+idempotency keys) for Zapier, n8n, Make, or your own service. See
+[`docs/CONNECTORS.md`](docs/CONNECTORS.md).
+
+**Where the team already reads.** `lce digest` renders the recurring what-changed
+summary as Markdown, Slack, HTML, or JSON, and posts to a Slack webhook or a CI
+artifact. `lce serve` exposes a dashboard at `/`.
+
+**Everything else:** the `lce` CLI, `.lce/config.json` per repository, one SQLite
+file you can query directly, JSON/CSV export of either layer, and a read-only
+HTTP API across state, delta, contradictions, unknowns, actions, decisions,
+proposals, metric, digest, and context.
+
+See [`docs/ADOPTION.md`](docs/ADOPTION.md),
+[`docs/INTEGRATION.md`](docs/INTEGRATION.md), and [`docs/API.md`](docs/API.md).
 
 ## What this is not
 

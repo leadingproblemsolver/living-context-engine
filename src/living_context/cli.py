@@ -8,9 +8,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from living_context import actions as action_router
-from living_context import integrate, prompts
+from living_context import connectors, decisions as decision_board, digest as digest_module
+from living_context import identity, integrate, profiles, prompts, review
 from living_context.config import load_config, resolve_project
-from living_context.context import build_context, write_context
+from living_context.context import (
+    build_context,
+    explain_claim,
+    render_explanation,
+    write_context,
+)
 from living_context.delta import apply_packet, apply_packets
 from living_context.extract import extract_path, iter_sources, observed_at, read_source
 from living_context.llm import LLMUnavailable
@@ -46,12 +52,20 @@ def build_parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="scaffold the engine into this repository")
     init.add_argument("--ci", action="store_true", help="also write a GitHub Actions workflow")
     init.add_argument("--force", action="store_true", help="overwrite existing files")
+    init.add_argument(
+        "--profile",
+        help=f"domain profile: {', '.join(sorted(profiles.PROFILES))}",
+    )
+    init.add_argument("--connectors", action="store_true", help="also write a connector config")
 
     ingest = sub.add_parser("ingest", help="read sources, diff against state, record changes")
     ingest.add_argument("path", nargs="*", help="files or directories (default: configured sources)")
     ingest.add_argument("--llm", action="store_true", help="use the Anthropic SDK to extract state")
     ingest.add_argument("--model", help="model id for --llm")
     ingest.add_argument("--no-state", action="store_true", help="store observations only")
+    ingest.add_argument(
+        "--stage", action="store_true", help="stage everything for review instead of applying"
+    )
     ingest.add_argument("--json", action="store_true")
 
     absorb = sub.add_parser("absorb", help="apply an observation packet (JSON or JSONL)")
@@ -100,6 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("prompts", help="list available prompts")
 
     metric = sub.add_parser("metric", help="uncertainty, and how fast it is falling")
+    metric.add_argument("--decision", help="scope the metric to one decision")
     metric.add_argument("--limit", type=int, default=20)
     metric.add_argument("--snapshot", action="store_true", help="record a new snapshot")
     metric.add_argument("--json", action="store_true")
@@ -160,6 +175,82 @@ def build_parser() -> argparse.ArgumentParser:
     delete_project.add_argument("target_project")
     delete_project.add_argument("--yes", action="store_true")
     sub.add_parser("validate", help="verify the repository and the graph's invariants")
+
+    review_cmd = sub.add_parser("review", help="proposals waiting for a human")
+    review_cmd.add_argument("--accept", nargs="+", metavar="ID", help="accept proposals")
+    review_cmd.add_argument("--reject", nargs="+", metavar="ID", help="reject proposals")
+    review_cmd.add_argument(
+        "--accept-all", action="store_true", help="accept every pending proposal in scope"
+    )
+    review_cmd.add_argument("--origin", help="filter by origin, e.g. model or connector:csv")
+    review_cmd.add_argument("--kind", help="filter by kind, e.g. claim or entity_merge")
+    review_cmd.add_argument("--note", default="", help="reason, recorded on rejection")
+    review_cmd.add_argument("--by", default="", help="who reviewed it")
+    review_cmd.add_argument("--limit", type=int, default=50)
+    review_cmd.add_argument("--json", action="store_true")
+
+    identity_cmd = sub.add_parser("identity", help="find entities and attributes that split")
+    identity_cmd.add_argument(
+        "--fix", action="store_true", help="stage merge and alias proposals for review"
+    )
+    identity_cmd.add_argument("--json", action="store_true")
+
+    merge_cmd = sub.add_parser("merge", help="merge one entity into another")
+    merge_cmd.add_argument("keep")
+    merge_cmd.add_argument("target")
+    merge_cmd.add_argument("--reason", default="")
+
+    decision_cmd = sub.add_parser("decision", help="register and score a decision")
+    decision_sub = decision_cmd.add_subparsers(dest="decision_command", required=True)
+    decision_add = decision_sub.add_parser("add", help="register an open decision")
+    decision_add.add_argument("question")
+    decision_add.add_argument("--owner", default="")
+    decision_add.add_argument("--weight", type=float, default=0.7)
+    decision_add.add_argument("--due", default="", dest="due_at")
+    decision_add.add_argument("--auto-link", action="store_true")
+    decision_link = decision_sub.add_parser("link", help="link evidence to a decision")
+    decision_link.add_argument("decision")
+    decision_link.add_argument("--claim", action="append", default=[])
+    decision_link.add_argument("--unknown", action="append", default=[])
+    decision_link.add_argument("--auto", action="store_true", help="link by relevance")
+    decision_show = decision_sub.add_parser("show", help="readiness for one decision")
+    decision_show.add_argument("decision")
+    decision_show.add_argument("--json", action="store_true")
+    decision_close = decision_sub.add_parser("close", help="record the call that was made")
+    decision_close.add_argument("decision")
+    decision_close.add_argument("--choice", required=True)
+    decision_close.add_argument("--rationale", default="")
+    decision_close.add_argument("--defer", action="store_true")
+
+    decisions_cmd = sub.add_parser("decisions", help="the decision board with readiness")
+    decisions_cmd.add_argument("--json", action="store_true")
+
+    pull = sub.add_parser("pull", help="fetch from configured connectors and stage the result")
+    pull.add_argument("--connector", help="only this connector name or id")
+    pull.add_argument("--dry-run", action="store_true")
+    pull.add_argument("--reset", action="store_true", help="ignore the stored cursor")
+    pull.add_argument("--json", action="store_true")
+
+    connectors_cmd = sub.add_parser("connectors", help="available and configured connectors")
+    connectors_cmd.add_argument("--json", action="store_true")
+
+    digest_cmd = sub.add_parser("digest", help="the recurring what-changed summary")
+    digest_cmd.add_argument("--since", help="ISO-8601 lower bound")
+    digest_cmd.add_argument(
+        "--format", choices=["md", "html", "slack", "json"], default="md", dest="output_format"
+    )
+    digest_cmd.add_argument("--output", help="write to a file")
+    digest_cmd.add_argument("--post-slack", action="store_true", help="post to the Slack webhook")
+    digest_cmd.add_argument("--slack-webhook", default="", help="override LCE_SLACK_WEBHOOK")
+
+    why = sub.add_parser("why", help="explain one belief and what would move it")
+    why.add_argument("claim_id")
+    why.add_argument("--json", action="store_true")
+
+    mcp_cmd = sub.add_parser("mcp", help="run as an MCP server over stdio")
+    mcp_cmd.add_argument("--print-config", action="store_true", help="print client config and exit")
+
+    sub.add_parser("profiles", help="available domain profiles")
     return parser
 
 
@@ -173,7 +264,14 @@ def _emit(payload: object) -> None:
 
 
 def _packet_for_file(
-    file_path: Path, reference: str, text: str, use_llm: bool, store, project, model
+    file_path: Path,
+    reference: str,
+    text: str,
+    use_llm: bool,
+    store,
+    project,
+    model,
+    store_profile: str = "",
 ) -> list[dict]:
     if file_path.suffix.lower() in PACKET_SUFFIXES:
         packets = load_packets(file_path)
@@ -185,7 +283,9 @@ def _packet_for_file(
     if use_llm:
         from living_context import llm
 
-        prompt = prompts.prompt_extract(store, project, text=text, source_ref=reference)
+        prompt = prompts.prompt_extract(
+            store, project, text=text, source_ref=reference, profile=store_profile
+        )
         packet = llm.extract_packet(prompt, model=model or llm.DEFAULT_MODEL)
         packet.setdefault("source", {})
         packet["source"].setdefault("ref", reference)
@@ -234,16 +334,28 @@ def command_ingest(args, store: Store, config, project: str) -> int:
                 continue
             try:
                 for packet in _packet_for_file(
-                    file_path, reference, text, args.llm, store, project, args.model
+                    file_path,
+                    reference,
+                    text,
+                    args.llm,
+                    store,
+                    project,
+                    args.model,
+                    config.profile,
                 ):
                     packets.append((packet, reference))
             except ValueError as error:
                 skipped.append(f"{reference}: {error}")
 
+    origin = "model" if args.llm else "parser"
+    stage_only = args.stage or not review.auto_applies(origin, config.auto_apply)
     summary = {
         "project": project,
+        "origin": origin,
+        "mode": "staged for review" if stage_only else "applied",
         "observations": record_summary,
         "skipped": skipped,
+        "staged": 0,
         "packets": 0,
         "entities_seen": 0,
         "claims_seen": 0,
@@ -255,6 +367,13 @@ def command_ingest(args, store: Store, config, project: str) -> int:
     }
     for packet, reference in packets:
         try:
+            if stage_only:
+                staged = review.stage_packet(store, project, packet, origin, reference)
+                summary["packets"] += 1
+                summary["staged"] += sum(
+                    value for key, value in staged["staged"].items() if key != "duplicates"
+                )
+                continue
             report = apply_packet(
                 store, project, packet, config.half_life_days, source_ref=reference
             )
@@ -282,8 +401,23 @@ def command_ingest(args, store: Store, config, project: str) -> int:
 
     print(
         f"{record_summary['records']} observation records from "
-        f"{record_summary['sources']} source(s); {summary['packets']} packet(s) applied."
+        f"{record_summary['sources']} source(s); {summary['packets']} packet(s) "
+        f"{'staged' if stage_only else 'applied'}."
     )
+    if stage_only:
+        print(
+            f"{summary['staged']} proposal(s) waiting for review (origin: {origin}). "
+            "Run `lce review`."
+        )
+        if skipped:
+            print(f"skipped {len(skipped)} source(s):")
+            for line in skipped[:8]:
+                print(f"  {line}")
+        print(
+            f"uncertainty unchanged at {before['uncertainty']:.2f} — "
+            "nothing enters the graph until you accept it."
+        )
+        return 0
     print(
         f"state: {summary['entities_seen']} entities touched, "
         f"{summary['claims_seen']} claims seen, {summary['evidence_added']} new evidence."
@@ -460,6 +594,7 @@ def command_prompt(args, store: Store, config, project: str) -> int:
         "limit": args.limit,
         "task": args.task,
         "id": args.target_id,
+        "profile": config.profile,
     }
     if args.input:
         source = Path(args.input)
@@ -482,6 +617,16 @@ def command_prompt(args, store: Store, config, project: str) -> int:
 
 
 def command_metric(args, store: Store, config, project: str) -> int:
+    if args.decision:
+        decision = store.find_decision(project, args.decision)
+        if decision is None:
+            raise ValueError(f"no decision matches: {args.decision}")
+        _emit(
+            decision_board.uncertainty_for_decision(
+                store, project, decision["decision_id"], config.half_life_days
+            )
+        )
+        return 0
     if args.snapshot:
         store.snapshot_metric(project, config.half_life_days, note="manual")
     current = store.uncertainty(project, config.half_life_days)
@@ -494,7 +639,7 @@ def command_metric(args, store: Store, config, project: str) -> int:
         hours = (
             parse_timestamp(newest["captured_at"]) - parse_timestamp(oldest["captured_at"])
         ).total_seconds() / 3600.0
-        if hours > 0:
+        if hours >= digest_module.MIN_RATE_HOURS:
             rate = round((oldest["uncertainty"] - newest["uncertainty"]) / hours, 5)
     payload = {"current": current, "history": history, "uncertainty_removed_per_hour": rate}
     if args.json:
@@ -629,6 +774,298 @@ def command_validate(args, store: Store, config, project: str) -> int:
     return 0 if not problems else 1
 
 
+
+# ---------------------------------------------------------------------------
+# review, identity, decisions, connectors, digest
+# ---------------------------------------------------------------------------
+
+
+def command_review(args, store: Store, config, project: str) -> int:
+    if args.accept:
+        result = review.accept_many(
+            store, project, args.accept, config.half_life_days, args.by
+        )
+        action_router.refresh_actions(store, project, config.half_life_days)
+        store.snapshot_metric(project, config.half_life_days, note="review")
+        _emit(result)
+        return 0 if not result["failed"] else 2
+    if args.reject:
+        _emit(
+            [
+                review.reject(store, project, proposal_id, args.note, args.by)
+                for proposal_id in args.reject
+            ]
+        )
+        return 0
+    if args.accept_all:
+        pending = store.proposals(
+            project, "pending", origin=args.origin, kind=args.kind, limit=1000
+        )
+        result = review.accept_many(
+            store,
+            project,
+            [row["proposal_id"] for row in pending],
+            config.half_life_days,
+            args.by,
+        )
+        action_router.refresh_actions(store, project, config.half_life_days)
+        store.snapshot_metric(project, config.half_life_days, note="review")
+        _emit(result)
+        return 0 if not result["failed"] else 2
+
+    pending = store.proposals(
+        project, "pending", origin=args.origin, kind=args.kind, limit=args.limit
+    )
+    if args.json:
+        _emit({"pending": pending, "acceptance": store.proposal_stats(project)})
+        return 0
+    if not pending:
+        print("Nothing waiting for review.")
+        return 0
+    print(f"{len(pending)} proposal(s) waiting:\n")
+    for row in pending:
+        print(f"  {row['proposal_id']}  [{row['kind']}]  via {row['origin']}")
+        print(f"      {row['summary']}")
+        print(f"      source: {row['source_ref']}")
+    stats = store.proposal_stats(project)
+    if stats:
+        print("\nacceptance so far:")
+        for origin, bucket in sorted(stats.items()):
+            rate = bucket["acceptance_rate"]
+            shown = f"{rate:.0%}" if rate is not None else "n/a"
+            print(
+                f"  {origin:<28} {shown} accepted "
+                f"({bucket['accepted']} yes / {bucket['rejected']} no / {bucket['pending']} open)"
+            )
+    print("\nAccept with: lce review --accept <id> [<id> ...]   (or --accept-all --origin parser)")
+    return 0
+
+
+def command_identity(args, store: Store, config, project: str) -> int:
+    entity_candidates = identity.duplicate_entities(store, project)
+    attribute_candidates = identity.duplicate_attributes(store, project)
+    if args.fix:
+        staged = identity.propose_identity_fixes(store, project)
+        _emit({"staged": staged, "next": "lce review --kind entity_merge"})
+        return 0
+    if args.json:
+        _emit({"entities": entity_candidates, "attributes": attribute_candidates})
+        return 0
+    if not entity_candidates and not attribute_candidates:
+        print("No split identities found.")
+        return 0
+    for candidate in entity_candidates:
+        print(
+            f"entity   {candidate['similarity']:.2f}  "
+            f"\"{candidate['merge_name']}\" -> \"{candidate['keep_name']}\" "
+            f"({candidate['kind']})"
+        )
+    for candidate in attribute_candidates:
+        print(
+            f"attribute {candidate['similarity']:.2f}  "
+            f"`{candidate['attribute']}` -> `{candidate['canonical']}`  {candidate['uses']}"
+        )
+    print("\nStage these for review with: lce identity --fix")
+    return 0
+
+
+def command_merge(args, store: Store, config, project: str) -> int:
+    keep = store.find_entity(project, args.keep)
+    target = store.find_entity(project, args.target)
+    if keep is None or target is None:
+        raise ValueError("both entities must exist; check `lce entities`")
+    _emit(
+        store.merge_entities(project, keep["entity_id"], target["entity_id"], args.reason)
+    )
+    return 0
+
+
+def _print_readiness(report: dict) -> None:
+    print(f"{report['question']}")
+    print(
+        f"  readiness {report['readiness']:.2f}  [{report['status']}]"
+        + (f"  owner {report['owner']}" if report["owner"] else "")
+        + (f"  due {report['due_at']}" if report["due_at"] else "")
+    )
+    print(f"  {report['verdict']}")
+    for claim in report["claims"]:
+        print(
+            f"    {claim['effective_confidence']:.2f}  {claim['entity']}."
+            f"{claim['attribute']} = {claim['value']}"
+        )
+    for unknown in report["blocking_unknowns"]:
+        print(f"    blocked by: {unknown['question']} (impact {unknown['impact']:.2f})")
+    for conflict in report["blocking_contradictions"]:
+        print(f"    conflict:   {conflict['note']}")
+    print(f"  id {report['decision_id']}")
+
+
+def command_decision(args, store: Store, config, project: str) -> int:
+    if args.decision_command == "add":
+        result = decision_board.add(
+            store, project, args.question, args.owner, args.weight, args.due_at
+        )
+        if args.auto_link:
+            result["auto_link"] = decision_board.auto_link(
+                store, project, result["decision_id"]
+            )
+        action_router.refresh_actions(store, project, config.half_life_days)
+        _emit(result)
+        return 0
+
+    decision = store.find_decision(project, args.decision)
+    if decision is None:
+        raise ValueError(f"no decision matches: {args.decision}")
+
+    if args.decision_command == "link":
+        results = []
+        if args.auto:
+            results.append(decision_board.auto_link(store, project, decision["decision_id"]))
+        for claim_id in args.claim:
+            results.append(
+                decision_board.link(store, project, decision["decision_id"], "claim", claim_id)
+            )
+        for unknown_id in args.unknown:
+            results.append(
+                decision_board.link(
+                    store, project, decision["decision_id"], "unknown", unknown_id
+                )
+            )
+        action_router.refresh_actions(store, project, config.half_life_days)
+        _emit(results)
+        return 0
+
+    if args.decision_command == "show":
+        report = decision_board.readiness(
+            store, project, decision["decision_id"], config.half_life_days
+        )
+        if args.json:
+            _emit(report)
+        else:
+            _print_readiness(report)
+        return 0
+
+    if args.decision_command == "close":
+        _emit(
+            store.close_decision(
+                decision["decision_id"],
+                args.choice,
+                args.rationale,
+                "deferred" if args.defer else "decided",
+            )
+        )
+        store.snapshot_metric(project, config.half_life_days, note="decision")
+        return 0
+    return 1
+
+
+def command_decisions(args, store: Store, config, project: str) -> int:
+    board = decision_board.board(store, project, config.half_life_days)
+    if args.json:
+        _emit(board)
+        return 0
+    if not board:
+        print('No decisions registered. Add one: lce decision add "Should we ...?"')
+        return 0
+    for report in sorted(board, key=lambda item: -item["readiness"]):
+        _print_readiness(report)
+        print()
+    return 0
+
+
+def command_pull(args, store: Store, config, project: str) -> int:
+    definitions = connectors.load_definitions(config.root)
+    if args.connector:
+        definitions = [
+            item
+            for item in definitions
+            if args.connector in {item["name"], item["id"]}
+        ]
+    if not definitions:
+        raise ValueError(
+            "no connectors configured. Run `lce connectors` to see what is available, "
+            "then create .lce/connectors.json (or `lce init --connectors`)."
+        )
+    report = connectors.pull(
+        store,
+        project,
+        config.root,
+        definitions,
+        dry_run=args.dry_run,
+        reset=args.reset,
+    )
+    if args.json:
+        _emit(report)
+        return 0 if not report["errors"] else 2
+    for entry in report["connectors"]:
+        status = entry.get("error") or f"{entry['packets']} packets, {entry['staged']} staged"
+        print(f"{entry['id']:<24} {status}")
+        for note in entry["notes"]:
+            print(f"    note: {note}")
+    if report["staged"]:
+        print(f"\n{report['staged']} proposal(s) staged. Review with: lce review")
+    elif not report["errors"]:
+        print("\nNothing new.")
+    return 0 if not report["errors"] else 2
+
+
+def command_connectors(args, store: Store, config, project: str) -> int:
+    payload = {
+        "available": connectors.catalogue(),
+        "configured": connectors.load_definitions(config.root),
+        "state": store.connector_states(project),
+    }
+    if args.json:
+        _emit(payload)
+        return 0
+    print("available:")
+    for item in payload["available"]:
+        print(f"  {item['name']:<16} {item['description']}")
+        print(f"      required: {', '.join(item['required_config'])}")
+    print("\nconfigured in .lce/connectors.json:")
+    for item in payload["configured"] or []:
+        print(f"  {item['id']:<16} ({item['name']})")
+    if not payload["configured"]:
+        print("  none — see docs/CONNECTORS.md, or run `lce init --connectors`")
+    for row in payload["state"]:
+        print(f"\n  {row['connector']}: last run {row['last_run_at']} — {row['last_result']}")
+    return 0
+
+
+def command_digest(args, store: Store, config, project: str) -> int:
+    report = digest_module.build(store, project, args.since, config.half_life_days)
+    if args.post_slack:
+        _emit(digest_module.post_slack(report, args.slack_webhook))
+        return 0
+    if args.output_format == "json":
+        rendered = json.dumps(report, indent=2, sort_keys=True, default=str)
+    elif args.output_format == "html":
+        rendered = digest_module.render_html(report)
+    elif args.output_format == "slack":
+        rendered = digest_module.render_slack(report)["text"]
+    else:
+        rendered = digest_module.render_markdown(report)
+    if args.output:
+        output = Path(args.output)
+        if not output.is_absolute():
+            output = config.root / output
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        print(output)
+    else:
+        sys.stdout.write(rendered if rendered.endswith("\n") else rendered + "\n")
+    return 0
+
+
+def command_why(args, store: Store, config, project: str) -> int:
+    report = explain_claim(store, project, args.claim_id, config.half_life_days)
+    if args.json:
+        _emit(report)
+    else:
+        sys.stdout.write(render_explanation(report))
+    return 0
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -648,7 +1085,29 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         project = args.project or config.project or root.name
-        _emit(integrate.initialise(root, project, with_ci=args.ci, force=args.force))
+        _emit(
+            integrate.initialise(
+                root,
+                project,
+                with_ci=args.ci,
+                force=args.force,
+                profile=args.profile,
+                with_connectors=args.connectors,
+            )
+        )
+        return 0
+
+    if args.command == "profiles":
+        _emit(profiles.catalogue())
+        return 0
+
+    if args.command == "mcp":
+        from living_context import mcp
+
+        if args.print_config:
+            _emit(integrate.mcp_client_config(root, config, args.project))
+            return 0
+        mcp.serve(root, args.project)
         return 0
 
     store = Store(root, config.database)
@@ -673,6 +1132,15 @@ def main(argv: list[str] | None = None) -> int:
             "entities": command_entities,
             "export": command_export,
             "validate": command_validate,
+            "review": command_review,
+            "identity": command_identity,
+            "merge": command_merge,
+            "decision": command_decision,
+            "decisions": command_decisions,
+            "pull": command_pull,
+            "connectors": command_connectors,
+            "digest": command_digest,
+            "why": command_why,
         }
 
         if args.command == "absorb":

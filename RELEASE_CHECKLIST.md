@@ -21,7 +21,24 @@
 - [x] Offline-installable deterministic wheel with the `llm` extra declared.
 - [x] Read-only API across both layers, non-loopback token requirement, and
       exact-origin CORS behaviour.
+- [x] Review gate: staged proposals, per-claim granularity, acceptance rates per
+      origin, and no state change until accepted.
+- [x] Identity resolution for entities and attributes, proposed rather than
+      applied, with recorded merges and forward-routing aliases.
+- [x] Decisions with links, weakest-link readiness, and decision-scoped
+      uncertainty.
+- [x] Connector contract with cursors, roll-up, and per-connector error
+      isolation; csv, github_issues, slack_export, filedrop.
+- [x] Staged write endpoint with a separate write token and idempotency keys.
+- [x] MCP server: handshake, 12 tools, prompt library, staged proposals, tool
+      errors.
+- [x] Digest in Markdown, Slack, HTML, JSON, plus the HTML dashboard.
+- [x] Domain profiles as data, including the shorter security half-life.
 - [ ] Model-assisted extraction against a live API.
+- [ ] Live GitHub and Slack pulls, and Slack webhook delivery.
+- [ ] A real MCP client session.
+- [ ] Review throughput at volume — whether the gate stays cheaper than the
+      errors it prevents.
 - [ ] Extraction quality against a labelled corpus.
 - [ ] Docker/Compose runtime because no container runtime was available.
 - [ ] Hosted TLS/reverse-proxy deployment.

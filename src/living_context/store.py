@@ -6,15 +6,19 @@ from pathlib import Path
 
 from living_context.models import (
     Action,
+    Decision,
     Claim,
     Contradiction,
     ContextRecord,
     Entity,
     Evidence,
     ObservationSource,
+    Proposal,
     Relationship,
     Transition,
     Unknown,
+    digest,
+    normalize,
     now_iso,
     staleness_factor,
 )
@@ -200,6 +204,84 @@ CREATE TABLE IF NOT EXISTS metrics(
     note TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_metrics_project ON metrics(project, captured_at);
+
+CREATE TABLE IF NOT EXISTS proposals(
+    proposal_id TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    decided_at TEXT,
+    decided_by TEXT NOT NULL,
+    note TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_proposals_project ON proposals(project, status, origin);
+
+CREATE TABLE IF NOT EXISTS decisions(
+    decision_id TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    question TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    status TEXT NOT NULL,
+    weight REAL NOT NULL,
+    due_at TEXT NOT NULL,
+    choice TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_decisions_project ON decisions(project, status);
+
+CREATE TABLE IF NOT EXISTS decision_links(
+    decision_id TEXT NOT NULL,
+    project TEXT NOT NULL,
+    target_kind TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(decision_id, target_kind, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_decision_links_target ON decision_links(project, target_id);
+
+CREATE TABLE IF NOT EXISTS vocabulary(
+    project TEXT NOT NULL,
+    attribute TEXT NOT NULL,
+    uses INTEGER NOT NULL,
+    canonical TEXT,
+    first_seen_at TEXT NOT NULL,
+    PRIMARY KEY(project, attribute)
+);
+
+CREATE TABLE IF NOT EXISTS merges(
+    merge_id TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    kept_entity TEXT NOT NULL,
+    merged_entity TEXT NOT NULL,
+    merged_name TEXT NOT NULL,
+    claims_moved INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    merged_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_merges_project ON merges(project);
+
+CREATE TABLE IF NOT EXISTS connector_state(
+    project TEXT NOT NULL,
+    connector TEXT NOT NULL,
+    cursor TEXT NOT NULL,
+    last_run_at TEXT NOT NULL,
+    last_result TEXT NOT NULL,
+    PRIMARY KEY(project, connector)
+);
+
+CREATE TABLE IF NOT EXISTS idempotency(
+    key TEXT PRIMARY KEY,
+    project TEXT NOT NULL,
+    response_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 STATE_TABLES = (
@@ -213,6 +295,12 @@ STATE_TABLES = (
     "relationships",
     "actions",
     "metrics",
+    "proposals",
+    "decisions",
+    "decision_links",
+    "vocabulary",
+    "merges",
+    "connector_state",
 )
 
 
@@ -1096,3 +1184,505 @@ class Store:
             "state": counts,
             "database": str(self.path),
         }
+
+    # -- proposals: nothing inferred enters state unreviewed -----------------
+
+    def add_proposal(self, proposal: Proposal) -> bool:
+        """Returns True when this is a new pending proposal."""
+        existing = _row(
+            self.conn.execute(
+                "SELECT status FROM proposals WHERE proposal_id=?", (proposal.proposal_id,)
+            ).fetchone()
+        )
+        if existing:
+            return False
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO proposals(
+                    proposal_id, project, kind, origin, payload_json, source_ref,
+                    summary, status, created_at, decided_at, decided_by, note
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    proposal.proposal_id,
+                    proposal.project,
+                    proposal.kind,
+                    proposal.origin,
+                    json.dumps(proposal.payload, sort_keys=True),
+                    proposal.source_ref,
+                    proposal.summary,
+                    proposal.status,
+                    proposal.created_at,
+                    proposal.decided_at,
+                    proposal.decided_by,
+                    proposal.note,
+                ),
+            )
+        return True
+
+    def proposals(
+        self,
+        project: str,
+        status: str | None = "pending",
+        origin: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        limit = max(1, min(1000, limit))
+        sql = "SELECT * FROM proposals WHERE project=?"
+        params: list[object] = [project]
+        for column, value in (("status", status), ("origin", origin), ("kind", kind)):
+            if value:
+                sql += f" AND {column}=?"
+                params.append(value)
+        sql += " ORDER BY created_at, proposal_id LIMIT ?"
+        params.append(limit)
+        result = []
+        for raw in self.conn.execute(sql, params):
+            row = dict(raw)
+            row["payload"] = json.loads(row.pop("payload_json"))
+            result.append(row)
+        return result
+
+    def get_proposal(self, proposal_id: str) -> dict | None:
+        row = _row(
+            self.conn.execute(
+                "SELECT * FROM proposals WHERE proposal_id=?", (proposal_id,)
+            ).fetchone()
+        )
+        if row is None:
+            return None
+        row["payload"] = json.loads(row.pop("payload_json"))
+        return row
+
+    def settle_proposal(
+        self, proposal_id: str, status: str, decided_by: str = "", note: str = ""
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE proposals SET status=?, decided_at=?, decided_by=?, note=?
+                WHERE proposal_id=?
+                """,
+                (status, now_iso(), decided_by, note, proposal_id),
+            )
+
+    def proposal_stats(self, project: str) -> dict:
+        """Acceptance rate per origin — the signal for whether to trust a source."""
+        stats: dict[str, dict] = {}
+        for raw in self.conn.execute(
+            "SELECT origin, status, COUNT(*) n FROM proposals WHERE project=? GROUP BY origin, status",
+            (project,),
+        ):
+            bucket = stats.setdefault(
+                raw["origin"], {"pending": 0, "accepted": 0, "rejected": 0, "superseded": 0}
+            )
+            bucket[raw["status"]] = raw["n"]
+        for bucket in stats.values():
+            settled = bucket["accepted"] + bucket["rejected"]
+            bucket["acceptance_rate"] = (
+                round(bucket["accepted"] / settled, 4) if settled else None
+            )
+        return stats
+
+    # -- decisions: what the claims are for ---------------------------------
+
+    def upsert_decision(self, decision: Decision) -> bool:
+        existing = self.get_decision(decision.decision_id)
+        if existing:
+            return False
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO decisions(
+                    decision_id, project, question, owner, status, weight, due_at,
+                    choice, rationale, created_at, decided_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    decision.decision_id,
+                    decision.project,
+                    decision.question,
+                    decision.owner,
+                    decision.status,
+                    decision.weight,
+                    decision.due_at,
+                    decision.choice,
+                    decision.rationale,
+                    decision.created_at,
+                    decision.decided_at,
+                ),
+            )
+        return True
+
+    def get_decision(self, decision_id: str) -> dict | None:
+        return _row(
+            self.conn.execute(
+                "SELECT * FROM decisions WHERE decision_id=?", (decision_id,)
+            ).fetchone()
+        )
+
+    def find_decision(self, project: str, needle: str) -> dict | None:
+        direct = self.get_decision(needle)
+        if direct and direct["project"] == project:
+            return direct
+        key = normalize(needle)
+        for raw in self.conn.execute(
+            "SELECT * FROM decisions WHERE project=? ORDER BY created_at", (project,)
+        ):
+            row = dict(raw)
+            if key and (key in normalize(row["question"]) or row["decision_id"].startswith(needle)):
+                return row
+        return None
+
+    def decisions(self, project: str, status: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM decisions WHERE project=?"
+        params: list[object] = [project]
+        if status:
+            sql += " AND status=?"
+            params.append(status)
+        sql += " ORDER BY status, due_at, created_at"
+        return [dict(raw) for raw in self.conn.execute(sql, params)]
+
+    def close_decision(
+        self, decision_id: str, choice: str, rationale: str, status: str = "decided"
+    ) -> dict:
+        if self.get_decision(decision_id) is None:
+            raise ValueError(f"unknown decision: {decision_id}")
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE decisions SET status=?, choice=?, rationale=?, decided_at=?
+                WHERE decision_id=?
+                """,
+                (status, choice, rationale, now_iso(), decision_id),
+            )
+        return {"decision_id": decision_id, "status": status, "choice": choice}
+
+    def link_decision(
+        self, project: str, decision_id: str, target_kind: str, target_id: str
+    ) -> bool:
+        with self.conn:
+            cursor = self.conn.execute(
+                """
+                INSERT OR IGNORE INTO decision_links(
+                    decision_id, project, target_kind, target_id, created_at
+                ) VALUES(?,?,?,?,?)
+                """,
+                (decision_id, project, target_kind, target_id, now_iso()),
+            )
+        return cursor.rowcount > 0
+
+    def unlink_decision(self, decision_id: str, target_id: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM decision_links WHERE decision_id=? AND target_id=?",
+                (decision_id, target_id),
+            )
+
+    def decision_links(self, decision_id: str) -> list[dict]:
+        return [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM decision_links WHERE decision_id=? ORDER BY target_kind",
+                (decision_id,),
+            )
+        ]
+
+    def decisions_for_target(self, project: str, target_id: str) -> list[dict]:
+        return [
+            dict(raw)
+            for raw in self.conn.execute(
+                """
+                SELECT d.* FROM decision_links l JOIN decisions d
+                  ON d.decision_id = l.decision_id
+                WHERE l.project=? AND l.target_id=?
+                """,
+                (project, target_id),
+            )
+        ]
+
+    # -- vocabulary and identity -------------------------------------------
+
+    def record_attribute(self, project: str, attribute: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO vocabulary(project, attribute, uses, canonical, first_seen_at)
+                VALUES(?,?,1,NULL,?)
+                ON CONFLICT(project, attribute) DO UPDATE SET uses = uses + 1
+                """,
+                (project, attribute, now_iso()),
+            )
+
+    def vocabulary(self, project: str) -> list[dict]:
+        return [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM vocabulary WHERE project=? ORDER BY uses DESC, attribute",
+                (project,),
+            )
+        ]
+
+    def set_attribute_canonical(self, project: str, attribute: str, canonical: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO vocabulary(project, attribute, uses, canonical, first_seen_at)
+                VALUES(?,?,0,?,?)
+                ON CONFLICT(project, attribute) DO UPDATE SET canonical=excluded.canonical
+                """,
+                (project, attribute, canonical, now_iso()),
+            )
+
+    def attribute_aliases(self, project: str) -> dict[str, str]:
+        return {
+            row["attribute"]: row["canonical"]
+            for row in self.conn.execute(
+                "SELECT attribute, canonical FROM vocabulary WHERE project=? AND canonical IS NOT NULL",
+                (project,),
+            )
+        }
+
+    def rename_attribute(self, project: str, attribute: str, canonical: str) -> int:
+        """Fold an attribute into another, moving its claims into the same slot."""
+        moved = 0
+        rows = [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM claims WHERE project=? AND attribute=?", (project, attribute)
+            )
+        ]
+        for row in rows:
+            new_id = digest(project, row["entity_id"], canonical, row["normalized_value"])
+            existing = self.get_claim(new_id)
+            with self.conn:
+                if existing:
+                    # The slot already holds this value: move the evidence across
+                    # and drop the duplicate claim.
+                    self.conn.execute(
+                        "UPDATE OR IGNORE evidence SET claim_id=? WHERE claim_id=?",
+                        (new_id, row["claim_id"]),
+                    )
+                    self.conn.execute(
+                        "DELETE FROM evidence WHERE claim_id=?", (row["claim_id"],)
+                    )
+                    self.conn.execute(
+                        "DELETE FROM claims WHERE claim_id=?", (row["claim_id"],)
+                    )
+                else:
+                    self.conn.execute(
+                        "UPDATE claims SET claim_id=?, attribute=? WHERE claim_id=?",
+                        (new_id, canonical, row["claim_id"]),
+                    )
+                    self.conn.execute(
+                        "UPDATE evidence SET claim_id=? WHERE claim_id=?",
+                        (new_id, row["claim_id"]),
+                    )
+                for table, column in (
+                    ("transitions", "claim_id"),
+                    ("contradictions", "claim_a"),
+                    ("contradictions", "claim_b"),
+                ):
+                    self.conn.execute(
+                        f"UPDATE OR IGNORE {table} SET {column}=? WHERE {column}=?",
+                        (new_id, row["claim_id"]),
+                    )
+                self.conn.execute(
+                    "UPDATE transitions SET attribute=? WHERE project=? AND attribute=?",
+                    (canonical, project, attribute),
+                )
+                self.conn.execute(
+                    "UPDATE contradictions SET attribute=? WHERE project=? AND attribute=?",
+                    (canonical, project, attribute),
+                )
+            moved += 1
+        self.set_attribute_canonical(project, attribute, canonical)
+        for claim_id in {
+            digest(project, row["entity_id"], canonical, row["normalized_value"])
+            for row in rows
+        }:
+            evidence = self.evidence_for(claim_id)
+            if evidence:
+                from living_context.models import confidence_from_evidence
+
+                self.update_claim(claim_id, confidence=confidence_from_evidence(evidence))
+        return moved
+
+    def merge_entities(self, project: str, keep_id: str, merge_id: str, reason: str = "") -> dict:
+        """Repoint everything at the surviving entity and record why."""
+        keep = _row(
+            self.conn.execute("SELECT * FROM entities WHERE entity_id=?", (keep_id,)).fetchone()
+        )
+        merged = _row(
+            self.conn.execute("SELECT * FROM entities WHERE entity_id=?", (merge_id,)).fetchone()
+        )
+        if keep is None or merged is None:
+            raise ValueError("both entities must exist to merge")
+        if keep_id == merge_id:
+            raise ValueError("cannot merge an entity into itself")
+
+        moved = 0
+        claims = [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM claims WHERE project=? AND entity_id=?", (project, merge_id)
+            )
+        ]
+        for row in claims:
+            new_id = digest(project, keep_id, row["attribute"], row["normalized_value"])
+            existing = self.get_claim(new_id)
+            with self.conn:
+                if existing:
+                    self.conn.execute(
+                        "UPDATE OR IGNORE evidence SET claim_id=? WHERE claim_id=?",
+                        (new_id, row["claim_id"]),
+                    )
+                    self.conn.execute("DELETE FROM evidence WHERE claim_id=?", (row["claim_id"],))
+                    self.conn.execute("DELETE FROM claims WHERE claim_id=?", (row["claim_id"],))
+                else:
+                    self.conn.execute(
+                        "UPDATE claims SET claim_id=?, entity_id=? WHERE claim_id=?",
+                        (new_id, keep_id, row["claim_id"]),
+                    )
+                    self.conn.execute(
+                        "UPDATE evidence SET claim_id=? WHERE claim_id=?",
+                        (new_id, row["claim_id"]),
+                    )
+                for table, column in (
+                    ("transitions", "claim_id"),
+                    ("contradictions", "claim_a"),
+                    ("contradictions", "claim_b"),
+                ):
+                    self.conn.execute(
+                        f"UPDATE OR IGNORE {table} SET {column}=? WHERE {column}=?",
+                        (new_id, row["claim_id"]),
+                    )
+            moved += 1
+
+        aliases = sorted(
+            set(json.loads(keep["aliases_json"]))
+            | set(json.loads(merged["aliases_json"]))
+            | {merged["canonical_key"]}
+        )
+        with self.conn:
+            for table in ("transitions", "contradictions", "unknowns", "relationships"):
+                column = "entity_id"
+                if table == "relationships":
+                    self.conn.execute(
+                        "UPDATE OR IGNORE relationships SET from_entity=? WHERE from_entity=?",
+                        (keep_id, merge_id),
+                    )
+                    self.conn.execute(
+                        "UPDATE OR IGNORE relationships SET to_entity=? WHERE to_entity=?",
+                        (keep_id, merge_id),
+                    )
+                    continue
+                self.conn.execute(
+                    f"UPDATE OR IGNORE {table} SET {column}=? WHERE {column}=?",
+                    (keep_id, merge_id),
+                )
+            self.conn.execute(
+                "UPDATE entities SET aliases_json=?, updated_at=? WHERE entity_id=?",
+                (json.dumps(aliases), now_iso(), keep_id),
+            )
+            self.conn.execute("DELETE FROM entities WHERE entity_id=?", (merge_id,))
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO merges(
+                    merge_id, project, kept_entity, merged_entity, merged_name,
+                    claims_moved, reason, merged_at
+                ) VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    digest(project, keep_id, merge_id),
+                    project,
+                    keep_id,
+                    merge_id,
+                    merged["name"],
+                    moved,
+                    reason,
+                    now_iso(),
+                ),
+            )
+
+        from living_context.models import confidence_from_evidence
+
+        for row in self.conn.execute(
+            "SELECT claim_id FROM claims WHERE project=? AND entity_id=?", (project, keep_id)
+        ).fetchall():
+            evidence = self.evidence_for(row["claim_id"])
+            if evidence:
+                self.update_claim(row["claim_id"], confidence=confidence_from_evidence(evidence))
+
+        return {
+            "kept": keep["name"],
+            "merged": merged["name"],
+            "claims_moved": moved,
+            "aliases": aliases,
+        }
+
+    def merges(self, project: str, limit: int = 50) -> list[dict]:
+        return [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM merges WHERE project=? ORDER BY merged_at DESC LIMIT ?",
+                (project, max(1, min(500, limit))),
+            )
+        ]
+
+    # -- connectors ---------------------------------------------------------
+
+    def connector_cursor(self, project: str, connector: str) -> str:
+        row = _row(
+            self.conn.execute(
+                "SELECT cursor FROM connector_state WHERE project=? AND connector=?",
+                (project, connector),
+            ).fetchone()
+        )
+        return row["cursor"] if row else ""
+
+    def set_connector_cursor(
+        self, project: str, connector: str, cursor: str, result: str = ""
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO connector_state(project, connector, cursor, last_run_at, last_result)
+                VALUES(?,?,?,?,?)
+                ON CONFLICT(project, connector) DO UPDATE SET
+                    cursor=excluded.cursor,
+                    last_run_at=excluded.last_run_at,
+                    last_result=excluded.last_result
+                """,
+                (project, connector, cursor, now_iso(), result[:500]),
+            )
+
+    def connector_states(self, project: str) -> list[dict]:
+        return [
+            dict(raw)
+            for raw in self.conn.execute(
+                "SELECT * FROM connector_state WHERE project=? ORDER BY connector", (project,)
+            )
+        ]
+
+    # -- idempotency for the write API --------------------------------------
+
+    def remembered_response(self, key: str) -> dict | None:
+        row = _row(
+            self.conn.execute(
+                "SELECT response_json FROM idempotency WHERE key=?", (key,)
+            ).fetchone()
+        )
+        return json.loads(row["response_json"]) if row else None
+
+    def remember_response(self, key: str, project: str, response: dict) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT OR REPLACE INTO idempotency(key, project, response_json, created_at)
+                VALUES(?,?,?,?)
+                """,
+                (key, project, json.dumps(response, sort_keys=True, default=str), now_iso()),
+            )

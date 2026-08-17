@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from living_context import profiles
 from living_context.config import CONFIG_RELATIVE, DEFAULTS
 
 OBSERVATION_README = """\
@@ -92,13 +93,35 @@ believe it, and what to check next. It is not a document store.
 
 ```bash
 lce ingest                       # read every configured source, diff, update state
+lce pull                         # fetch from connectors, staged for review
+lce review                       # accept or reject what was proposed
 lce delta                        # what changed and why
-lce state                        # the current reality model
-lce contradictions               # where the evidence disagrees with itself
+lce why <claim_id>               # why do we say that, and what would move it
+lce decisions                    # can each open decision be made yet
 lce actions --refresh            # ranked next validation actions
 lce context "should we build X"  # a decision-scoped context pack
-lce metric                       # uncertainty removed over time
+lce digest                       # the recurring what-changed summary
 ```
+
+## Register the decisions
+
+Claims exist to serve decisions. Until a decision is registered, the engine is
+guessing at what matters.
+
+```bash
+lce decision add "Should we build X first?" --owner you --auto-link
+lce decisions
+lce decision close <id> --choice "yes, behind a flag" --rationale "pilot held"
+```
+
+## From inside your assistant
+
+```bash
+lce mcp --print-config    # paste into Claude Desktop, Claude Code, or Cursor
+```
+
+The assistant can then read this graph and propose observations, which land in
+`lce review`. It cannot apply anything.
 
 ## Adding an observation
 
@@ -120,6 +143,9 @@ you.
 - Contradictions are kept, not resolved by whoever wrote last.
 - Confidence is derived from evidence weight, source independence, and age —
   never typed in by hand.
+- Nothing a model or a connector produced enters the graph until a person
+  accepts it in `lce review`.
+- One thing has one name. Run `lce identity --fix` when the graph starts to fork.
 """
 
 WORKFLOW = """\
@@ -141,14 +167,29 @@ jobs:
         run: python -m pip install living-context-engine
       - name: Update state from sources
         run: lce ingest --json
+      - name: Pull from connectors
+        run: lce pull --json || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check the graph against its own provenance
+        run: lce validate
+      - name: Flag split identities
+        run: lce identity
       - name: Rank next actions
         run: lce actions --refresh --json
-      - name: Build a decision pack
+      - name: Decision readiness
+        run: lce decisions
+      - name: Build the digest and a decision pack
         run: |
+          lce digest --output artifacts/digest.md
+          lce digest --format html --output artifacts/index.html
           lce context "what changed, what is blocked, what should we verify next" \\
             --output artifacts/current-context.md
-      - name: Report uncertainty
-        run: lce metric --json
+      - name: Post the digest to Slack
+        if: github.ref == 'refs/heads/main'
+        run: lce digest --post-slack || true
+        env:
+          LCE_SLACK_WEBHOOK: ${{ secrets.LCE_SLACK_WEBHOOK }}
       - uses: actions/upload-artifact@v4
         with:
           name: living-context
@@ -180,11 +221,94 @@ def _update_gitignore(root: Path) -> str:
     return "updated"
 
 
-def initialise(root: Path, project: str, with_ci: bool = False, force: bool = False) -> dict:
+CONNECTOR_CONFIG = {
+    "connectors": [
+        {
+            "name": "filedrop",
+            "id": "inbox",
+            "enabled": True,
+            "config": {"path": ".lce/inbox", "kind": "document", "archive": True},
+        },
+        {
+            "name": "csv",
+            "id": "survey",
+            "enabled": False,
+            "config": {
+                "path": "research/survey.csv",
+                "entity_column": "company",
+                "entity_kind": "company",
+                "actor_column": "respondent",
+                "date_column": "responded_at",
+                "kind": "interview",
+                "claims": {"primary_pain": "biggest_problem"},
+                "unknown_columns": [],
+                "excerpt_column": "verbatim",
+            },
+        },
+        {
+            "name": "github_issues",
+            "id": "issues",
+            "enabled": False,
+            "config": {
+                "repo": "owner/name",
+                "labels": [],
+                "state": "all",
+                "kind": "document",
+                "token_env": "GITHUB_TOKEN",
+            },
+        },
+    ]
+}
+
+INBOX_README = """\
+# Inbox
+
+Anything dropped in here is picked up by `lce pull` and staged for review:
+
+- `*.json` / `*.jsonl` — observation packets (see `docs/OBSERVATIONS.md`)
+- `*.md` / `*.txt` — notes using the claim syntax
+
+This is the seam for tools the engine has never heard of. Have Zapier, n8n,
+Make, a cron job, or a mail rule write a file here and the loop picks it up.
+Processed files move to `_processed/`.
+"""
+
+
+def mcp_client_config(root: Path, config, project: str | None = None) -> dict:
+    """The block a user pastes into an MCP client to reach this project."""
+    target = project or config.project or Path(root).name
+    return {
+        "note": (
+            "Add this to your MCP client (Claude Desktop: claude_desktop_config.json; "
+            "Claude Code: `claude mcp add`). The assistant can then read the graph and "
+            "propose observations, which land in `lce review`."
+        ),
+        "mcpServers": {
+            "living-context": {
+                "command": "lce",
+                "args": ["--root", str(Path(root).resolve()), "--project", target, "mcp"],
+            }
+        },
+    }
+
+
+def initialise(
+    root: Path,
+    project: str,
+    with_ci: bool = False,
+    force: bool = False,
+    profile: str | None = None,
+    with_connectors: bool = False,
+) -> dict:
     """Make an arbitrary repository ready to run the engine."""
     root = Path(root)
+    resolved = profiles.get(profile)
     config = dict(DEFAULTS)
     config["project"] = project
+    config["profile"] = profile or ""
+    if resolved and profile == "security-posture":
+        # A control verified a year ago is not verified.
+        config["half_life_days"] = 90
     results = {
         CONFIG_RELATIVE: _write(
             root / CONFIG_RELATIVE, json.dumps(config, indent=2) + "\n", force
@@ -202,15 +326,35 @@ def initialise(root: Path, project: str, with_ci: bool = False, force: bool = Fa
         results[".github/workflows/lce.yml"] = _write(
             root / ".github/workflows/lce.yml", WORKFLOW, force
         )
+    if with_connectors:
+        results[".lce/connectors.json"] = _write(
+            root / ".lce/connectors.json", json.dumps(CONNECTOR_CONFIG, indent=2) + "\n", force
+        )
+        results[".lce/inbox/README.md"] = _write(
+            root / ".lce/inbox/README.md", INBOX_README, force
+        )
+    next_steps = ["lce ingest", "lce actions --refresh"]
+    if resolved:
+        results[".lce/observations/00-open-questions.md"] = _write(
+            root / ".lce/observations/00-open-questions.md",
+            profiles.starter_observation(profile or ""),
+            force,
+        )
+        next_steps = [
+            "lce ingest",
+            *[
+                f'lce decision add "{question}"'
+                for question in resolved["starter_decisions"]
+            ],
+            "lce decisions",
+        ]
+    next_steps.append('lce context "what should we verify next"')
     return {
         "project": project,
+        "profile": profile or None,
         "root": str(root),
         "files": results,
-        "next": [
-            "lce ingest",
-            "lce actions --refresh",
-            'lce context "what should we verify next"',
-        ],
+        "next": next_steps,
     }
 
 

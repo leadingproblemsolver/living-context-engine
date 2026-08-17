@@ -534,3 +534,103 @@ class ObservationSource:
 
     def to_dict(self):
         return asdict(self)
+
+
+# ---------------------------------------------------------------------------
+# Adoption layer: proposals, decisions, connectors
+# ---------------------------------------------------------------------------
+
+PROPOSAL_KINDS = {"claim", "unknown", "relationship", "entity_merge", "attribute_alias"}
+PROPOSAL_STATUSES = {"pending", "accepted", "rejected", "superseded"}
+DECISION_STATUSES = {"open", "decided", "deferred", "reversed"}
+
+# Where a proposal came from. Deterministic parsing is trusted by default;
+# anything inferred or pulled from a third party is not.
+ORIGINS = {"parser", "model", "connector", "api", "human"}
+TRUSTED_ORIGINS = ("parser", "human")
+
+
+@dataclass
+class Proposal:
+    """A change waiting for a human. Nothing inferred enters state unreviewed."""
+
+    proposal_id: str
+    project: str
+    kind: str
+    origin: str
+    payload: dict[str, Any]
+    source_ref: str
+    summary: str
+    status: str = "pending"
+    created_at: str = field(default_factory=now_iso)
+    decided_at: str | None = None
+    decided_by: str = ""
+    note: str = ""
+
+    @staticmethod
+    def build(
+        project: str,
+        kind: str,
+        origin: str,
+        payload: dict,
+        source_ref: str,
+        summary: str,
+    ) -> "Proposal":
+        import json as _json
+
+        # Identity is the content, so re-pulling a source cannot pile up
+        # duplicate pending proposals.
+        key = _json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        return Proposal(
+            proposal_id=digest(project, kind, key),
+            project=project,
+            kind=kind if kind in PROPOSAL_KINDS else "claim",
+            origin=origin,
+            payload=payload,
+            source_ref=source_ref,
+            summary=summary[:400],
+        )
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class Decision:
+    """An open question the organisation owes an answer to.
+
+    Claims exist to serve decisions. Linking them is what turns a confidence
+    number into something worth spending a week on.
+    """
+
+    decision_id: str
+    project: str
+    question: str
+    owner: str = ""
+    status: str = "open"
+    weight: float = 0.7
+    due_at: str = ""
+    choice: str = ""
+    rationale: str = ""
+    created_at: str = field(default_factory=now_iso)
+    decided_at: str | None = None
+
+    @staticmethod
+    def build(
+        project: str,
+        question: str,
+        owner: str = "",
+        weight: float = 0.7,
+        due_at: str = "",
+    ) -> "Decision":
+        return Decision(
+            decision_id=digest(project, normalize(question), length=16),
+            project=project,
+            question=question.strip(),
+            owner=owner,
+            weight=max(0.0, min(1.0, weight)),
+            due_at=due_at,
+        )
+
+    def to_dict(self):
+        return asdict(self)

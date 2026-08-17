@@ -161,7 +161,12 @@ def _apply_claim(
     half_life_days: float,
     report: dict,
 ) -> dict | None:
+    # Fold known attribute aliases before anything else. `main_pain` and
+    # `primary_pain` must land in the same slot or the delta silently vanishes.
+    aliases = store.attribute_aliases(project)
     attribute = item["attribute"]
+    attribute_key = normalize(attribute).replace(" ", "_")
+    attribute = aliases.get(attribute_key, attribute)
     observed_at = observation.observed_at
     claim = Claim.build(
         project=project,
@@ -174,6 +179,7 @@ def _apply_claim(
     if claim.validate():
         return None
 
+    store.record_attribute(project, claim.attribute)
     prior = store.claims_in_slot(project, entity_id, claim.attribute)
     existing = store.get_claim(claim.claim_id)
     store.upsert_claim(claim)

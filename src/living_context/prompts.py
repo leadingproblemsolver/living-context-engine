@@ -4,6 +4,7 @@ import json
 
 from living_context.context import build_context, citations, render_markdown
 from living_context.observe import OBSERVATION_SCHEMA
+from living_context.profiles import vocabulary_block
 from living_context.store import Store
 
 MAX_INPUT_CHARS = 120_000
@@ -58,7 +59,13 @@ def _current_beliefs(store: Store, project: str, limit: int = 80) -> str:
     return "\n".join(lines[:limit])
 
 
-def prompt_extract(store: Store, project: str, text: str = "", source_ref: str = "") -> str:
+def prompt_extract(
+    store: Store,
+    project: str,
+    text: str = "",
+    source_ref: str = "",
+    profile: str = "",
+) -> str:
     body = (text or "").strip()
     truncated = len(body) > MAX_INPUT_CHARS
     if truncated:
@@ -78,12 +85,14 @@ def prompt_extract(store: Store, project: str, text: str = "", source_ref: str =
         if truncated
         else ""
     )
+    profile_block = vocabulary_block(profile) if profile else ""
     return f"""\
 You are converting a raw observation into a state update for a Living Context
 Engine. The engine stores entities, claims, evidence, and confidence — not
 documents.
 
-{source_block}
+{source_block}{profile_block}
+
 Existing entities and attributes in this project (reuse these names):
 {_entity_vocabulary(store, project)}
 
@@ -315,7 +324,11 @@ PROMPTS = {
     "extract": (
         "Turn raw source material into an observation packet the engine can absorb",
         lambda store, project, args: prompt_extract(
-            store, project, text=args.get("text", ""), source_ref=args.get("source_ref", "")
+            store,
+            project,
+            text=args.get("text", ""),
+            source_ref=args.get("source_ref", ""),
+            profile=args.get("profile", ""),
         ),
     ),
     "interview-guide": (

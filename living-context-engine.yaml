@@ -1,6 +1,6 @@
 repo:
   name: living-context-engine
-  version: 2.0.0
+  version: 2.1.0
   status: release_candidate
   classification: reality_delta_compiler
 product:
@@ -29,6 +29,13 @@ invariants_enforced:
   - task_specific_retrieval
   - uncertainty_produces_action
   - memory_compounds
+  - nothing_inferred_enters_unreviewed
+  - one_thing_has_one_name
+  - every_claim_serves_a_decision
+  - the_engine_speaks_first
+  - every_integration_is_one_shape
+  - adaptation_is_data_not_a_fork
+  - the_graph_explains_itself
 north_star_metric: uncertainty removed per unit time
 integration:
   surfaces:
@@ -37,16 +44,32 @@ integration:
     - python_api
     - repository_config
     - github_actions
+    - mcp_stdio_server
+    - connectors
+    - staged_write_http_endpoint
+    - slack_webhook
+    - html_dashboard
     - sqlite
     - markdown
     - json
     - jsonl
     - csv
     - read_only_http
+  connectors: [csv, github_issues, slack_export, filedrop]
+  profiles: [customer-discovery, product-decisions, security-posture, hiring]
   credentials_required_for_local_use: false
   optional_model_extraction: anthropic sdk via the `llm` extra
   token_required_for_non_loopback_api: true
 verified_offline:
+  - staged review with per-origin acceptance rates and no state change until accepted
+  - entity and attribute identity resolution, proposed rather than applied
+  - decision readiness governed by the weakest load-bearing belief
+  - decision-scoped uncertainty
+  - connector contract, cursors, roll-up, and error isolation
+  - MCP handshake, tool and prompt listing, staged proposals, and tool-level errors
+  - write endpoint token separation and idempotency
+  - digest rendering in markdown, Slack, and HTML
+  - profile vocabulary and half-life adaptation
   - deterministic line extraction and packet validation
   - evidence idempotence across repeated ingestion
   - confidence derived from evidence weight, source independence, and age
@@ -59,6 +82,10 @@ verified_offline:
   - project isolation, deletion, and graph self-validation
   - read-only HTTP state, delta, contradiction, unknown, action, metric, and context endpoints
 unverified_external:
+  - live GitHub and Slack pulls against real accounts
+  - a real MCP client session end to end
+  - Slack webhook delivery
+  - whether the review gate's cost stays below the value it protects at volume
   - extraction quality against a labelled real corpus
   - model-assisted extraction accuracy at scale
   - whether the ranked actions measurably shorten real decisions

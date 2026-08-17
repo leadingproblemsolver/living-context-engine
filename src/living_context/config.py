@@ -13,6 +13,10 @@ DEFAULTS = {
     "model": "claude-opus-5",
     "effort": "high",
     "database": "data/living-context.sqlite",
+    "profile": "",
+    # Deterministic parsing of a file a human wrote is applied directly. Model
+    # extraction and connector pulls are staged for review.
+    "auto_apply": ["parser", "human"],
 }
 
 
@@ -25,6 +29,8 @@ class Config:
     model: str = DEFAULTS["model"]
     effort: str = DEFAULTS["effort"]
     database: str = DEFAULTS["database"]
+    profile: str = ""
+    auto_apply: list[str] = field(default_factory=lambda: list(DEFAULTS["auto_apply"]))
     path: Path | None = None
 
     @property
@@ -39,6 +45,8 @@ class Config:
             "model": self.model,
             "effort": self.effort,
             "database": self.database,
+            "profile": self.profile,
+            "auto_apply": self.auto_apply,
         }
 
 
@@ -65,6 +73,10 @@ def load_config(root: Path) -> Config:
     config.model = str(raw.get("model") or DEFAULTS["model"])
     config.effort = str(raw.get("effort") or DEFAULTS["effort"])
     config.database = str(raw.get("database") or DEFAULTS["database"])
+    config.profile = str(raw.get("profile") or "")
+    auto_apply = raw.get("auto_apply")
+    if isinstance(auto_apply, list):
+        config.auto_apply = [str(item) for item in auto_apply if str(item).strip()]
     return config
 
 

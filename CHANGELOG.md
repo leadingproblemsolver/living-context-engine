@@ -1,5 +1,59 @@
 # Changelog
 
+## 2.1.0 — 2026-08-17
+
+The adoption layer: the loop from 2.0.0 wired into the places work actually
+happens, behind a review gate. Seven more invariants, each answering a specific
+reason tools like this get abandoned — see `docs/ADOPTION.md`.
+
+### Added
+
+- **Review gate (invariant 8).** Model extraction, connector pulls, and API
+  writes are staged as proposals — one per claim — and applied only when a human
+  accepts. `lce review [--accept|--reject|--accept-all]`, with acceptance rate
+  tracked per origin so you can see which sources earn their review cost.
+  `auto_apply` in config controls the policy; deterministic parsing stays direct.
+- **Identity resolution (invariant 9).** `lce identity [--fix]` and `lce merge`
+  find and fold entities and attributes that have split. Attribute drift is
+  caught by shared word plus shared entity, because a second name for one slot
+  hides the delta instead of just splitting it. The better-evidenced name
+  survives; the other becomes an alias so future ingests land correctly. Every
+  merge is recorded with its reason.
+- **Decisions as first-class (invariant 10).** `lce decision add|link|show|close`
+  and `lce decisions`. Linking a claim raises its importance floor, which feeds
+  action ranking. Readiness is governed by the weakest load-bearing belief, and
+  `lce metric --decision <id>` scopes the north-star metric to one call.
+- **The digest (invariant 11).** `lce digest` in Markdown, Slack, HTML, or JSON,
+  with `--post-slack` and an HTML dashboard at `GET /`.
+- **Connectors (invariant 12).** One contract — fetch → packet → stage — with
+  `csv` (including population roll-up), `github_issues`, `slack_export`, and
+  `filedrop`. `lce connectors`, `lce pull [--dry-run|--reset]`, per-connector
+  cursors.
+- **Write API.** `POST /api/observations` with a separate `LCE_API_WRITE_TOKEN`
+  (which must differ from the read token) and `Idempotency-Key` support. It
+  stages; it never applies.
+- **Domain profiles (invariant 13).** `lce init --profile` for
+  `customer-discovery`, `product-decisions`, `security-posture`, and `hiring` —
+  vocabulary, starter questions, and evidence guidance as data rather than a
+  fork. The profile is injected into the extraction prompt so two teams running
+  one profile produce comparable graphs.
+- **MCP server.** `lce mcp` exposes 12 tools and the whole prompt library over
+  stdio, so Claude Desktop, Claude Code, or Cursor can read the graph and propose
+  observations. `lce mcp --print-config` prints the client block.
+- **`lce why` (invariant 14).** Walks one belief back to its evidence and forward
+  to what would move it — including saying explicitly when a claim has hit its
+  method ceiling and no more of the same evidence will help.
+- New read endpoints: `/api/decisions`, `/api/proposals`, `/api/digest`.
+- `lce ingest --stage`, `lce doctor`, `lce profiles`.
+
+### Changed
+
+- The generated CI workflow now pulls, validates, checks identity, reports
+  decision readiness, and posts the digest.
+- `.lce/config.json` gains `profile` and `auto_apply`.
+- Rates over sub-hour windows are no longer reported; a trend measured across
+  seconds was noise dressed as a number.
+
 ## 2.0.0 — 2026-07-31
 
 The engine became a state-transition loop rather than a document index.

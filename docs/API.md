@@ -4,7 +4,10 @@
 lce serve --host 127.0.0.1 --port 8790
 ```
 
-The service never writes. Ingestion, resolution, and deletion are CLI-only.
+One write endpoint, which **stages** rather than applies. Ingestion, acceptance,
+resolution, and deletion are CLI-only.
+
+`GET /` serves an HTML dashboard of the current digest.
 
 ## Authentication
 
@@ -42,7 +45,24 @@ GET /api/unknowns?project=<id>&status=open
 GET /api/actions?project=<id>&status=proposed&limit=20
 GET /api/metric?project=<id>&limit=20
 GET /api/context?project=<id>&task=<question>&limit=25
+GET /api/decisions?project=<id>
+GET /api/proposals?project=<id>&status=pending&limit=50
+GET /api/digest?project=<id>&since=<iso8601>
 ```
+
+### Write
+
+```text
+POST /api/observations
+```
+
+Requires `LCE_API_WRITE_TOKEN`, which must differ from `LCE_API_TOKEN` — the
+server refuses to start otherwise, so a read token can never propose state. Send
+`Idempotency-Key` to make retries safe. Body is one packet, `{"packets": [...]}`,
+or a bare array; limit 5 MB. Claims without evidence are rejected and named.
+
+Everything it accepts is **staged for review**. See
+[`CONNECTORS.md`](CONNECTORS.md) for the full contract.
 
 `/api/context` is the interesting one: it runs the same task-scoped assembly as
 `lce context` and returns the pack as JSON — entities and claims with citations,

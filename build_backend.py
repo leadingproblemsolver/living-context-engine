@@ -7,7 +7,7 @@ import io
 import zipfile
 from pathlib import Path
 
-DIST = "living_context_engine-2.0.0"
+DIST = "living_context_engine-2.1.0"
 NAME = "living-context-engine"
 SUMMARY = "Local-first reality delta compiler: turns observations into traceable state, contradictions, and next validation actions"
 PACKAGE = "living_context"
@@ -24,7 +24,7 @@ def _metadata() -> bytes:
     return (
         "Metadata-Version: 2.4\n"
         f"Name: {NAME}\n"
-        "Version: 2.0.0\n"
+        "Version: 2.1.0\n"
         f"Summary: {SUMMARY}\n"
         "Requires-Python: >=3.10\n"
         "License-Expression: MIT\n"

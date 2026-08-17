@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from living_context.models import normalize
+from living_context.models import KIND_CEILINGS, normalize, staleness_factor
 from living_context.store import Store
 
 STOPWORDS = {
@@ -18,7 +18,7 @@ STOPWORDS = {
 ALWAYS_RELEVANT_KINDS = {"decision", "constraint", "risk"}
 
 
-def _terms(text: str) -> set[str]:
+def question_terms(text: str) -> set[str]:
     return {
         token
         for token in re.findall(r"[a-z0-9][a-z0-9_-]{1,}", normalize(text))
@@ -26,7 +26,7 @@ def _terms(text: str) -> set[str]:
     }
 
 
-def _score(terms: set[str], *fields: str) -> float:
+def term_overlap(terms: set[str], *fields: str) -> float:
     if not terms:
         return 0.0
     blob = normalize(" ".join(field for field in fields if field))
@@ -42,7 +42,14 @@ def citations(evidence: list[dict], limit: int = 4) -> list[dict]:
     """
     grouped: dict[tuple[str, str, str], dict] = {}
     for row in evidence:
-        source = f"{row['source_ref']}:{row['locator'].split('#')[0]}".rstrip(":")
+        locator = row["locator"].split("#")[0]
+        # A connector often bakes the row into the source ref already; repeating
+        # it reads as two different citations of the same thing.
+        source = (
+            row["source_ref"]
+            if not locator or locator in row["source_ref"]
+            else f"{row['source_ref']}:{locator}"
+        ).rstrip(":")
         key = (source, row["kind"], normalize(row["excerpt"]))
         bucket = grouped.setdefault(
             key,
@@ -76,15 +83,15 @@ def build_context(
     graph should produce two different packs.
     """
     limit = max(1, min(200, limit))
-    terms = _terms(task)
+    terms = question_terms(task)
 
     scored_entities = []
     for group in store.state(project, half_life_days=half_life_days):
         claim_scores = []
         for claim in group["claims"]:
-            claim_score = _score(terms, claim["attribute"], claim["value"])
+            claim_score = term_overlap(terms, claim["attribute"], claim["value"])
             claim_scores.append((claim_score, claim))
-        entity_score = _score(terms, group["entity"], group["kind"])
+        entity_score = term_overlap(terms, group["entity"], group["kind"])
         best_claim = max((score for score, _ in claim_scores), default=0.0)
         relevance = max(entity_score, best_claim)
         if group["kind"] in ALWAYS_RELEVANT_KINDS:
@@ -119,12 +126,12 @@ def build_context(
     contradictions = [
         row
         for row in store.contradictions(project, "open", half_life_days)
-        if not in_scope or row["entity_id"] in in_scope or _score(terms, row["note"]) > 0
+        if not in_scope or row["entity_id"] in in_scope or term_overlap(terms, row["note"]) > 0
     ]
     unknowns = [
         row
         for row in store.unknowns(project, "open")
-        if _score(terms, row["question"], row["blocks_decision"]) > 0 or row["impact"] >= 0.6
+        if term_overlap(terms, row["question"], row["blocks_decision"]) > 0 or row["impact"] >= 0.6
     ] or store.unknowns(project, "open")[:5]
 
     transitions = [
@@ -269,3 +276,122 @@ def write_context(pack: dict, output: Path) -> dict:
         "claims": pack["coverage"]["claims_included"],
         "actions": len(pack["next_actions"]),
     }
+
+
+def explain_claim(
+    store: Store, project: str, claim_ref: str, half_life_days: float = 180.0
+) -> dict:
+    """Walk one belief back to its sources and forward to what would change it.
+
+    The question a user actually asks of a knowledge system is not "what do we
+    know" but "why do you say that".
+    """
+    claim = store.get_claim(claim_ref)
+    if claim is None:
+        for group in store.state(project, half_life_days=half_life_days):
+            for candidate in group["claims"]:
+                if candidate["claim_id"].startswith(claim_ref):
+                    claim = store.get_claim(candidate["claim_id"])
+                    break
+            if claim:
+                break
+    if claim is None:
+        raise ValueError(f"unknown claim: {claim_ref}")
+
+    entity = store.conn.execute(
+        "SELECT name, kind FROM entities WHERE entity_id=?", (claim["entity_id"],)
+    ).fetchone()
+    evidence = store.evidence_for(claim["claim_id"])
+    decay = staleness_factor(claim["last_seen_at"], half_life_days)
+    kinds: dict[str, int] = {}
+    actors: set[str] = set()
+    for row in evidence:
+        kinds[row["kind"]] = kinds.get(row["kind"], 0) + 1
+        actors.add(str(row["actor"]).split("#")[0])
+
+    strongest = max(kinds, key=lambda key: KIND_CEILINGS.get(key, 0.0)) if kinds else ""
+    ceiling = KIND_CEILINGS.get(strongest, 0.0)
+    at_ceiling = bool(ceiling) and claim["confidence"] >= ceiling - 0.01
+
+    history = [
+        row
+        for row in store.transitions(project, limit=500)
+        if row["claim_id"] == claim["claim_id"]
+        or row["superseded_claim_id"] == claim["claim_id"]
+    ]
+    conflicts = [
+        row
+        for row in store.contradictions(project, None, half_life_days)
+        if claim["claim_id"] in (row["claim_a"], row["claim_b"])
+    ]
+
+    if at_ceiling:
+        to_move = (
+            f"nothing of the same kind will help — {strongest} evidence caps at "
+            f"{ceiling:.2f}. Only stronger evidence (a measurement, transaction, or "
+            f"experiment) can raise this."
+        )
+    elif len(actors) <= 1:
+        to_move = "a second independent source; repeats from the same one add little"
+    else:
+        to_move = "more independent sources, or one stronger method"
+
+    return {
+        "claim_id": claim["claim_id"],
+        "entity": entity["name"] if entity else claim["entity_id"],
+        "entity_kind": entity["kind"] if entity else "",
+        "attribute": claim["attribute"],
+        "value": claim["value"],
+        "status": claim["status"],
+        "confidence": claim["confidence"],
+        "effective_confidence": round(claim["confidence"] * decay, 4),
+        "staleness_factor": decay,
+        "importance": claim["importance"],
+        "first_seen_at": claim["first_seen_at"],
+        "last_seen_at": claim["last_seen_at"],
+        "evidence_kinds": kinds,
+        "independent_sources": len(actors),
+        "method_ceiling": {"kind": strongest, "ceiling": ceiling, "at_ceiling": at_ceiling},
+        "citations": citations(evidence, limit=12),
+        "history": history,
+        "contradictions": conflicts,
+        "serves_decisions": store.decisions_for_target(project, claim["claim_id"]),
+        "what_would_move_it": to_move,
+    }
+
+
+def render_explanation(report: dict) -> str:
+    lines = [
+        f"{report['entity']}.{report['attribute']} = {report['value']}",
+        "",
+        f"  confidence      {report['effective_confidence']:.2f} "
+        f"(stored {report['confidence']:.2f} × age {report['staleness_factor']:.2f})",
+        f"  importance      {report['importance']:.2f}",
+        f"  evidence        {sum(report['evidence_kinds'].values())} rows, "
+        f"{report['independent_sources']} independent source(s): "
+        + ", ".join(f"{count}×{kind}" for kind, count in sorted(report["evidence_kinds"].items())),
+    ]
+    ceiling = report["method_ceiling"]
+    if ceiling["kind"]:
+        marker = " — AT CEILING" if ceiling["at_ceiling"] else ""
+        lines.append(
+            f"  method ceiling  {ceiling['ceiling']:.2f} ({ceiling['kind']}){marker}"
+        )
+    lines.extend(["", "  cited:"])
+    for item in report["citations"]:
+        repeats = f" ×{item['count']}" if item["count"] > 1 else ""
+        lines.append(f"    - [{item['kind']}{repeats}] {item['source']} — {item['excerpt'][:140]}")
+    if report["history"]:
+        lines.extend(["", "  how it got here:"])
+        for row in report["history"]:
+            lines.append(f"    - [{row['transition_type']}] {row['rationale']}")
+    if report["contradictions"]:
+        lines.extend(["", "  disputed by:"])
+        for row in report["contradictions"]:
+            lines.append(f"    - [{row['status']}] {row['note']}")
+    if report["serves_decisions"]:
+        lines.extend(["", "  serves decisions:"])
+        for row in report["serves_decisions"]:
+            lines.append(f"    - {row['question']} ({row['status']})")
+    lines.extend(["", f"  to move it: {report['what_would_move_it']}"])
+    return "\n".join(lines) + "\n"
