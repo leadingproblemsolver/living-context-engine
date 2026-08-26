@@ -15,6 +15,13 @@ on:
   schedule:
     - cron: "17 5 * * 1,4"
 
+# GitHub issue search has a secondary abuse limiter independent of the normal
+# request quota. Serialize this external-discovery workflow so PR, scheduled,
+# and manual runs cannot create avoidable concurrent search bursts.
+concurrency:
+  group: constraint-intelligence-${{ github.repository }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
