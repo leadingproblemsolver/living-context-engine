@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,10 +25,15 @@ from pathlib import Path
 from typing import Any
 
 API_URL = "https://api.github.com/search/issues"
-USER_AGENT = "living-context-engine-review-pipeline/2.1"
+USER_AGENT = "living-context-engine-review-pipeline/2.2"
 # GitHub Search rejects queries with more than five explicit AND/OR/NOT operators.
 # Five phrases require at most four OR operators and leave the safety qualifiers intact.
 MAX_TERMS_PER_SEARCH = 5
+# Authenticated issue search allows a bounded request rate but can still trigger
+# secondary abuse protection on bursts. Pace searches and recover conservatively.
+SEARCH_PACE_SECONDS = 2.2
+SECONDARY_RETRY_LIMIT = 3
+SECONDARY_BACKOFF_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -77,14 +83,27 @@ def github_get(params: dict[str, str], token: str | None) -> dict[str, Any]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GitHub API returned {exc.code}: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"GitHub API request failed: {exc.reason}") from exc
+
+    for attempt in range(SECONDARY_RETRY_LIMIT + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            secondary_limited = exc.code == 403 and "secondary rate limit" in body.lower()
+            if secondary_limited and attempt < SECONDARY_RETRY_LIMIT:
+                retry_after = exc.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after else SECONDARY_BACKOFF_SECONDS * (2 ** attempt)
+                except ValueError:
+                    delay = SECONDARY_BACKOFF_SECONDS * (2 ** attempt)
+                time.sleep(max(delay, SEARCH_PACE_SECONDS))
+                continue
+            raise RuntimeError(f"GitHub API returned {exc.code}: {body}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"GitHub API request failed: {exc.reason}") from exc
+
+    raise RuntimeError("GitHub API search retry budget exhausted")
 
 
 def age_score(created_at: str) -> int:
@@ -219,9 +238,13 @@ def main() -> int:
     config = load_config(args.config)
     token = os.getenv("GITHUB_TOKEN")
     candidates: dict[str, Candidate] = {}
+    first_search = True
 
     for query in config["queries"]:
         for search in build_queries(query, args.created_after):
+            if not first_search:
+                time.sleep(SEARCH_PACE_SECONDS)
+            first_search = False
             payload = github_get(
                 {"q": search, "sort": "updated", "order": "desc", "per_page": str(args.per_query)},
                 token,
