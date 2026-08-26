@@ -1,0 +1,52 @@
+{
+  "queries": [
+    {
+      "id": "context-loss-and-resume",
+      "terms": [
+        "losing context",
+        "resume work",
+        "context handoff",
+        "stale context",
+        "project memory"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Show a source-linked handoff/resume pattern using deterministic extraction and a compact context pack. Mention LCE only if the issue needs durable project memory rather than chat memory."
+    },
+    {
+      "id": "decision-provenance",
+      "terms": [
+        "decision log",
+        "decision provenance",
+        "audit trail",
+        "source line",
+        "traceable decisions"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Offer a minimal decision-record schema preserving source path, line, timestamp, and content hash; explain how this prevents unsupported summaries."
+    },
+    {
+      "id": "operational-state-drift",
+      "terms": [
+        "state drift",
+        "project status stale",
+        "blocked by missing context",
+        "handoff failure",
+        "context synchronization"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Identify the missing state boundary, propose deterministic re-ingestion and replacement semantics, and distinguish searchable evidence from inferred state."
+    },
+    {
+      "id": "local-first-operational-memory",
+      "terms": [
+        "local first memory",
+        "offline project memory",
+        "sqlite knowledge base",
+        "local context store",
+        "no cloud knowledge base"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Provide a local SQLite plus CLI/API architecture and the smallest ingestion/query loop that addresses the issue without requiring a hosted service."
+    }
+  ]
+}

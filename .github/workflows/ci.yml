@@ -11,3 +11,21 @@ jobs:
       - run: python -m pytest -q
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: PYTHONPATH=src python -m living_context.cli --root . validate
+      - name: Compile warm-start constraint intelligence
+        run: |
+          python scripts/compile_constraint_corpus.py \
+            --input data/constraint_seed_signals.json \
+            --taxonomy config/constraint_taxonomy.json
+          test -s artifacts/constraint-intelligence.json
+          test -s artifacts/constraint-leaderboard.json
+          test -s artifacts/constraint-intelligence.md
+      - name: Upload warm-start intelligence
+        uses: actions/upload-artifact@v4
+        with:
+          name: warm-start-constraint-intelligence
+          path: |
+            artifacts/constraint-intelligence.json
+            artifacts/constraint-leaderboard.json
+            artifacts/constraint-intelligence.md
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,132 @@
+{
+  "queries": [
+    {
+      "id": "runtime-truth-and-recovery",
+      "terms": [
+        "manual restart",
+        "stuck running",
+        "silent failure",
+        "not registered",
+        "workflow active",
+        "published but",
+        "readiness",
+        "liveness",
+        "reconnect"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Look for declared state diverging from actual serving state. Preserve as evidence by default; interact only if a concrete liveness/reconciliation gap remains unresolved."
+    },
+    {
+      "id": "side-effect-integrity",
+      "terms": [
+        "duplicate execution",
+        "sent twice",
+        "duplicate message",
+        "partial delivery",
+        "retry duplicate",
+        "false 500",
+        "already committed",
+        "idempotency",
+        "timeout retry"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Identify the exact operation identity and ambiguous-outcome boundary. Prefer reproduction/attempt tracing over generic idempotency advice."
+    },
+    {
+      "id": "identity-and-credentials",
+      "terms": [
+        "anonymous caller",
+        "authorization header",
+        "credential works",
+        "credential missing",
+        "user_id none",
+        "wrong user",
+        "request context lost",
+        "external secrets",
+        "oauth refresh"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Trace the effective principal/credential at the exact production execution boundary and compare it with the test/configuration surface."
+    },
+    {
+      "id": "persistence-resume-and-replay",
+      "terms": [
+        "resume fails",
+        "after restart",
+        "stale run",
+        "checkpoint",
+        "suspended run",
+        "paused run",
+        "replay duplicate",
+        "rehydrate",
+        "persisted state"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Determine authoritative run state, generation/revision identity, and whether restart/replay can create duplicate or stale continuation."
+    },
+    {
+      "id": "delivery-and-queue-assurance",
+      "terms": [
+        "never delivered",
+        "never sent",
+        "queued but",
+        "queue stuck",
+        "missed webhook",
+        "missed email",
+        "trigger stopped",
+        "message lost",
+        "partial delivery"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Separate internal completion from downstream delivery. Look for durable receipts, claim/dispatch state, partial outcomes, and reconciliation."
+    },
+    {
+      "id": "state-amplification-and-resource-pressure",
+      "terms": [
+        "out of memory",
+        "OOM",
+        "memory leak",
+        "swap",
+        "snapshot size",
+        "history size",
+        "redis memory",
+        "payload too large",
+        "manual restart"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Look for state retained or copied disproportionately across persistence/replay boundaries and quantify the amplification factor."
+    },
+    {
+      "id": "configuration-and-fidelity",
+      "terms": [
+        "config ignored",
+        "environment variable ignored",
+        "setting lost",
+        "deserialize",
+        "serialization",
+        "external secrets",
+        "works in test",
+        "works in editor",
+        "fails in production"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Compare declared/saved configuration with the effective runtime configuration and preserve provenance of what actually executed."
+    },
+    {
+      "id": "buyer-cost-and-workarounds",
+      "terms": [
+        "production outage",
+        "manual workaround",
+        "daily restart",
+        "rolled back",
+        "downgrade",
+        "hours debugging",
+        "days debugging",
+        "customer impact",
+        "enterprise production"
+      ],
+      "exclude_labels": ["duplicate", "invalid", "good first issue"],
+      "help_angle": "Prioritize measurable operator cost and buyer proximity. This query is for corpus enrichment even when no public contribution is appropriate."
+    }
+  ]
+}
