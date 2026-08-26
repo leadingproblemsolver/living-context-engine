@@ -27,6 +27,21 @@ def test_build_query_preserves_issue_and_safety_filters():
     assert "archived:false" in rendered
 
 
+def test_build_queries_batches_broad_signal_families_within_github_boolean_limit():
+    query = {
+        "id": "broad",
+        "terms": [f"signal {index}" for index in range(1, 10)],
+        "exclude_labels": ["duplicate", "invalid"],
+    }
+
+    rendered = MODULE.build_queries(query, "2026-05-01")
+
+    assert len(rendered) == 2
+    assert all(search.count(" OR ") <= 4 for search in rendered)
+    for term in query["terms"]:
+        assert sum(f'"{term}"' in search for search in rendered) == 1
+
+
 def test_score_prefers_specific_active_human_pain():
     item = {
         "number": 42,
