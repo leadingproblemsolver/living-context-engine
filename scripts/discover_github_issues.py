@@ -24,7 +24,10 @@ from pathlib import Path
 from typing import Any
 
 API_URL = "https://api.github.com/search/issues"
-USER_AGENT = "living-context-engine-review-pipeline/2.0"
+USER_AGENT = "living-context-engine-review-pipeline/2.1"
+# GitHub Search rejects queries with more than five explicit AND/OR/NOT operators.
+# Five phrases require at most four OR operators and leave the safety qualifiers intact.
+MAX_TERMS_PER_SEARCH = 5
 
 
 @dataclass(frozen=True)
@@ -153,14 +156,27 @@ def score_item(item: dict[str, Any], query: dict[str, Any]) -> Candidate:
     )
 
 
-def build_query(query: dict[str, Any], created_after: str) -> str:
-    phrases = " OR ".join(f'"{term}"' for term in query.get("terms", []))
+def build_query(query: dict[str, Any], created_after: str, terms: list[str] | None = None) -> str:
+    selected_terms = [str(term) for term in (terms if terms is not None else query.get("terms", []))]
+    phrases = " OR ".join(f'"{term}"' for term in selected_terms)
     exclusions = " ".join(f'-label:"{label}"' for label in query.get("exclude_labels", []))
     repositories = " ".join(f"repo:{repo}" for repo in query.get("repositories", []))
+    phrase_clause = f"({phrases}) " if phrases else ""
     return (
-        f"is:issue is:open created:>{created_after} ({phrases}) "
+        f"is:issue is:open created:>{created_after} {phrase_clause}"
         f"{repositories} {exclusions} archived:false"
     ).strip()
+
+
+def build_queries(query: dict[str, Any], created_after: str) -> list[str]:
+    """Split broad signal families into GitHub-legal boolean query batches."""
+    terms = [str(term) for term in query.get("terms", [])]
+    if not terms:
+        return [build_query(query, created_after, [])]
+    return [
+        build_query(query, created_after, terms[index:index + MAX_TERMS_PER_SEARCH])
+        for index in range(0, len(terms), MAX_TERMS_PER_SEARCH)
+    ]
 
 
 def render_markdown(candidates: list[Candidate]) -> str:
@@ -205,17 +221,20 @@ def main() -> int:
     candidates: dict[str, Candidate] = {}
 
     for query in config["queries"]:
-        search = build_query(query, args.created_after)
-        payload = github_get({"q": search, "sort": "updated", "order": "desc", "per_page": str(args.per_query)}, token)
-        for item in payload.get("items", []):
-            if "pull_request" in item:
-                continue
-            candidate = score_item(item, query)
-            if candidate.score < args.min_score:
-                continue
-            current = candidates.get(candidate.url)
-            if current is None or candidate.score > current.score:
-                candidates[candidate.url] = candidate
+        for search in build_queries(query, args.created_after):
+            payload = github_get(
+                {"q": search, "sort": "updated", "order": "desc", "per_page": str(args.per_query)},
+                token,
+            )
+            for item in payload.get("items", []):
+                if "pull_request" in item:
+                    continue
+                candidate = score_item(item, query)
+                if candidate.score < args.min_score:
+                    continue
+                current = candidates.get(candidate.url)
+                if current is None or candidate.score > current.score:
+                    candidates[candidate.url] = candidate
 
     ranked = sorted(candidates.values(), key=lambda item: (-item.score, -item.comments, item.updated_at))
     args.output.parent.mkdir(parents=True, exist_ok=True)
