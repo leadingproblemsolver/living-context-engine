@@ -1,6 +1,11 @@
 name: Build constraint intelligence queue
 
 on:
+  # The workflow is introduced by the constraint-intelligence PR itself, so the
+  # first authoritative live run occurs on the canonical main merge SHA.
+  push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
     inputs:
